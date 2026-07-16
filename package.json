@@ -1,0 +1,21 @@
+{
+  "name": "fairpay",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node src/server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.8.1",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.1"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
