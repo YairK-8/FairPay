@@ -54,7 +54,7 @@ function render() {
   if (!state.user) return renderAuth();
   app.innerHTML = `
     <div class="mobile-shell">
-      <main class="mobile-main">${state.eventData ? eventView() : eventsView()}</main>
+      <main class="mobile-main ${state.eventData ? "event-main" : "home-main"}">${state.eventData ? eventView() : eventsView()}</main>
       ${
         state.eventData
           ? `<button class="home-create-bar event-create-bar" type="button" data-action="new-expense">${iconSvg("plus")}<span>הוצאה חדשה</span></button>`
@@ -129,28 +129,24 @@ function eventsView() {
   const owedToMe = state.events.filter((event) => event.userBalance > 0).reduce((sum, event) => sum + Number(event.userBalance || 0), 0);
   const iOwe = Math.abs(state.events.filter((event) => event.userBalance < 0).reduce((sum, event) => sum + Number(event.userBalance || 0), 0));
   return `
-    <header class="home-header">
-      <div class="home-logo"><span>FAIR</span><span>PAY</span></div>
-      <button class="home-profile-button" type="button" data-action="profile" aria-label="פרופיל">${avatarMarkup(state.user, "mini")}</button>
-    </header>
     <section class="profile-card">
+      <div class="hero-watermark" aria-hidden="true">${iconSvg("sync")}</div>
+      <div class="home-logo"><span>FAIR</span><span>PAY</span></div>
       <div class="profile-top">
         ${avatarMarkup(state.user, "large")}
         <div>
           <h1>${escapeHtml(state.user.name)}</h1>
           <p>${escapeHtml(state.user.email)}</p>
+          <button class="hero-profile-button" type="button" data-action="profile">${iconSvg("user")}<span>פרטים אישיים</span></button>
         </div>
       </div>
       <div class="balance-card">
-        <div class="balance-title">${iconSvg("wallet")}<span>החשבון שלי</span></div>
         <div class="balance-grid">
+          <div><span>אני חייב</span><strong class="red">${formatMoney(iOwe, "₪")}</strong></div>
+          <div class="balance-total"><small>מאזן כללי</small><strong>${formatMoney(owedToMe - iOwe, "₪")}</strong></div>
           <div><span>חייבים לי</span><strong class="green">${formatMoney(owedToMe, "₪")}</strong></div>
-          <div><span>אני חייב</span><strong>${formatMoney(iOwe, "₪")}</strong></div>
         </div>
-        <div class="balance-total">
-          <span>${iconSvg("chart")}</span>
-          <div><small>מאזן כללי</small><strong>${formatMoney(owedToMe - iOwe, "₪")}</strong></div>
-        </div>
+        <span class="balance-analytics" aria-hidden="true">${iconSvg("chart")}</span>
       </div>
     </section>
     <section class="groups-section">

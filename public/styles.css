@@ -5652,3 +5652,554 @@ textarea::placeholder {
 .auth-submit .bi {
   color: #ffffff !important;
 }
+
+/* Premium home dashboard redesign */
+.home-main {
+  min-height: 100dvh !important;
+  padding: 34px 26px 120px !important;
+  color: #1f1f1f !important;
+  background:
+    radial-gradient(circle at 20% 4%, rgba(174, 234, 58, 0.16), transparent 26%),
+    radial-gradient(circle at 82% 20%, rgba(141, 220, 31, 0.1), transparent 28%),
+    linear-gradient(180deg, #f8f7f2 0%, #eef4e8 100%) !important;
+}
+
+.home-main .home-header {
+  display: none !important;
+}
+
+.home-main .profile-card {
+  position: relative !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+  width: 100% !important;
+  min-height: 304px !important;
+  margin: 0 !important;
+  padding: 28px !important;
+  overflow: hidden !important;
+  border-radius: 30px !important;
+  border: 1px solid rgba(255, 255, 255, 0.45) !important;
+  background: rgba(255, 255, 255, 0.18) !important;
+  backdrop-filter: blur(24px) !important;
+  -webkit-backdrop-filter: blur(24px) !important;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.05) !important;
+}
+
+.home-main .profile-card::before,
+.home-main .profile-card::after {
+  content: none !important;
+}
+
+.home-main .hero-watermark {
+  position: absolute !important;
+  left: 28px !important;
+  bottom: 64px !important;
+  z-index: 0 !important;
+  width: 148px !important;
+  height: 148px !important;
+  display: grid !important;
+  place-items: center !important;
+  color: rgba(31, 31, 31, 0.05) !important;
+  font-size: 132px !important;
+  pointer-events: none !important;
+}
+
+.home-main .hero-watermark .bi {
+  font-size: inherit !important;
+  color: inherit !important;
+}
+
+.home-main .home-logo {
+  position: absolute !important;
+  top: 28px !important;
+  right: 28px !important;
+  z-index: 2 !important;
+  width: auto !important;
+  height: auto !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #1f1f1f !important;
+  font-size: 24px !important;
+  line-height: 1 !important;
+  letter-spacing: 0 !important;
+}
+
+.home-main .home-logo span:first-child {
+  color: #1f1f1f !important;
+}
+
+.home-main .home-logo span:last-child {
+  color: #28a745 !important;
+}
+
+.home-main .profile-top {
+  position: relative !important;
+  z-index: 1 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 24px !important;
+  margin-top: 58px !important;
+  padding: 0 !important;
+  direction: ltr !important;
+}
+
+.home-main .profile-top > div {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  min-width: 0 !important;
+  direction: ltr !important;
+}
+
+.home-main .profile-avatar {
+  width: 72px !important;
+  height: 72px !important;
+  flex: 0 0 72px !important;
+  border-radius: 999px !important;
+  border: 3px solid rgba(255, 255, 255, 0.86) !important;
+  background: rgba(255, 255, 255, 0.56) !important;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.1) !important;
+  color: #24462e !important;
+  font-size: 18px !important;
+  font-weight: 800 !important;
+  overflow: hidden !important;
+}
+
+.home-main .profile-top h1 {
+  margin: 0 !important;
+  color: #1f1f1f !important;
+  font-size: 30px !important;
+  font-weight: 800 !important;
+  line-height: 1.05 !important;
+  letter-spacing: 0 !important;
+}
+
+.home-main .profile-top p {
+  margin: 8px 0 18px !important;
+  color: #757575 !important;
+  font-size: 16px !important;
+  font-weight: 500 !important;
+  line-height: 1.2 !important;
+  direction: ltr !important;
+}
+
+.home-main .hero-profile-button {
+  height: 34px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 0 16px !important;
+  border-radius: 999px !important;
+  border: 1px solid rgba(255, 255, 255, 0.58) !important;
+  background: rgba(255, 255, 255, 0.62) !important;
+  color: #24462e !important;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.04) !important;
+  font-size: 14px !important;
+  font-weight: 800 !important;
+}
+
+.home-main .hero-profile-button .bi {
+  color: #4f8f23 !important;
+  font-size: 15px !important;
+}
+
+.home-main .balance-card {
+  position: relative !important;
+  z-index: 1 !important;
+  display: grid !important;
+  grid-template-columns: 1fr 56px !important;
+  align-items: center !important;
+  gap: 24px !important;
+  margin: 30px 0 0 !important;
+  padding: 0 !important;
+  min-height: auto !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.home-main .balance-card::before,
+.home-main .balance-card::after {
+  content: none !important;
+}
+
+.home-main .balance-grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  align-items: center !important;
+  gap: 0 !important;
+  width: 100% !important;
+}
+
+.home-main .balance-grid > div {
+  min-width: 0 !important;
+  padding: 0 18px !important;
+  text-align: center !important;
+  border-inline-start: 1px solid rgba(31, 31, 31, 0.1) !important;
+}
+
+.home-main .balance-grid > div:first-child {
+  border-inline-start: 0 !important;
+}
+
+.home-main .balance-grid span,
+.home-main .balance-grid small {
+  display: block !important;
+  margin: 0 0 8px !important;
+  color: #757575 !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+}
+
+.home-main .balance-grid strong {
+  display: block !important;
+  color: #1f1f1f !important;
+  font-size: 26px !important;
+  font-weight: 850 !important;
+  line-height: 1 !important;
+}
+
+.home-main .balance-total strong {
+  font-size: 32px !important;
+}
+
+.home-main .balance-grid .green {
+  color: #28a745 !important;
+}
+
+.home-main .balance-grid .red {
+  color: #e35d5d !important;
+}
+
+.home-main .balance-analytics {
+  width: 56px !important;
+  height: 56px !important;
+  display: grid !important;
+  place-items: center !important;
+  border-radius: 18px !important;
+  border: 1px solid rgba(255, 255, 255, 0.55) !important;
+  background: rgba(255, 255, 255, 0.72) !important;
+  color: #4f8f23 !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06) !important;
+}
+
+.home-main .balance-analytics .bi {
+  color: inherit !important;
+  font-size: 25px !important;
+}
+
+.home-main .groups-section {
+  width: 100% !important;
+  margin: 40px 0 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.home-main .groups-section::before,
+.home-main .groups-section::after {
+  content: none !important;
+}
+
+.home-main .section-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  margin: 0 0 26px !important;
+  gap: 18px !important;
+}
+
+.home-main .section-row h2 {
+  margin: 0 !important;
+  color: #1f1f1f !important;
+  font-size: 26px !important;
+  font-weight: 850 !important;
+  line-height: 1.1 !important;
+}
+
+.home-main .section-row button {
+  height: 46px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 0 18px !important;
+  border-radius: 18px !important;
+  border: 1px solid rgba(255, 255, 255, 0.55) !important;
+  background: rgba(255, 255, 255, 0.38) !important;
+  color: #3d6d22 !important;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.04) !important;
+  font-size: 14px !important;
+  font-weight: 800 !important;
+}
+
+.home-main .event-list {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 24px !important;
+}
+
+.home-main .group-row {
+  position: relative !important;
+  min-height: 150px !important;
+  display: grid !important;
+  grid-template-columns: 84px minmax(0, 1fr) minmax(92px, auto) 52px !important;
+  align-items: center !important;
+  gap: 22px !important;
+  width: 100% !important;
+  padding: 22px !important;
+  border-radius: 24px !important;
+  border: 1px solid rgba(255, 255, 255, 0.45) !important;
+  background: rgba(255, 255, 255, 0.16) !important;
+  backdrop-filter: blur(18px) !important;
+  -webkit-backdrop-filter: blur(18px) !important;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.05) !important;
+  color: #1f1f1f !important;
+  text-align: start !important;
+}
+
+.home-main .group-row::before,
+.home-main .group-row::after {
+  content: none !important;
+}
+
+.home-main .group-thumb {
+  width: 84px !important;
+  height: 84px !important;
+  border-radius: 20px !important;
+  border: 1px solid rgba(255, 255, 255, 0.56) !important;
+  background: rgba(238, 244, 232, 0.72) !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.05) !important;
+  color: #4f8f23 !important;
+}
+
+.home-main .group-thumb .bi {
+  color: inherit !important;
+  font-size: 36px !important;
+}
+
+.home-main .group-main {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 8px !important;
+  min-width: 0 !important;
+}
+
+.home-main .group-main strong {
+  color: #1f1f1f !important;
+  font-size: 22px !important;
+  font-weight: 850 !important;
+  line-height: 1.1 !important;
+}
+
+.home-main .group-main small {
+  color: #757575 !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+}
+
+.home-main .mini-members {
+  margin-top: 4px !important;
+}
+
+.home-main .mini-members i,
+.home-main .mini-members em {
+  width: 34px !important;
+  height: 34px !important;
+  margin-inline-start: -8px !important;
+  border: 2px solid rgba(255, 255, 255, 0.78) !important;
+  background: rgba(238, 244, 232, 0.74) !important;
+  color: #24462e !important;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.05) !important;
+  font-size: 12px !important;
+  font-weight: 850 !important;
+}
+
+.home-main .group-balance {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  white-space: nowrap !important;
+}
+
+.home-main .group-balance small {
+  color: #757575 !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+}
+
+.home-main .group-balance b {
+  color: #1f1f1f !important;
+  font-size: 24px !important;
+  font-weight: 850 !important;
+  line-height: 1 !important;
+}
+
+.home-main .group-balance b.green {
+  color: #28a745 !important;
+}
+
+.home-main .group-balance b.red {
+  color: #e35d5d !important;
+}
+
+.home-main .group-delete,
+.home-main .group-menu {
+  width: 52px !important;
+  height: 52px !important;
+  display: grid !important;
+  place-items: center !important;
+  border-radius: 17px !important;
+  border: 1px solid rgba(255, 255, 255, 0.55) !important;
+  background: rgba(238, 244, 232, 0.72) !important;
+  color: #1f1f1f !important;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.04) !important;
+}
+
+.home-main .group-delete .bi,
+.home-main .group-menu .bi {
+  color: inherit !important;
+  font-size: 22px !important;
+}
+
+.home-main .home-empty {
+  min-height: 150px !important;
+  display: grid !important;
+  place-items: center !important;
+  padding: 24px !important;
+  border-radius: 24px !important;
+  border: 1px solid rgba(255, 255, 255, 0.45) !important;
+  background: rgba(255, 255, 255, 0.16) !important;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.05) !important;
+}
+
+.home-create-bar {
+  height: 60px !important;
+  width: calc(100% - 52px) !important;
+  max-width: 560px !important;
+  left: 50% !important;
+  right: auto !important;
+  bottom: 22px !important;
+  transform: translateX(-50%) !important;
+  border-radius: 26px !important;
+  border: 1px solid rgba(141, 220, 31, 0.28) !important;
+  background: linear-gradient(90deg, #b8f545, #a6ec3a) !important;
+  color: #1f1f1f !important;
+  box-shadow: 0 12px 26px rgba(141, 220, 31, 0.18) !important;
+  font-size: 19px !important;
+  font-weight: 850 !important;
+}
+
+.home-create-bar .bi,
+.home-create-bar span {
+  color: #1f1f1f !important;
+}
+
+@media (max-width: 460px) {
+  .home-main {
+    padding: 22px 16px 108px !important;
+  }
+
+  .home-main .profile-card {
+    min-height: 292px !important;
+    padding: 22px !important;
+  }
+
+  .home-main .home-logo {
+    top: 22px !important;
+    right: 22px !important;
+    font-size: 21px !important;
+  }
+
+  .home-main .profile-top {
+    gap: 16px !important;
+    margin-top: 54px !important;
+  }
+
+  .home-main .profile-top h1 {
+    font-size: 25px !important;
+  }
+
+  .home-main .profile-top p {
+    font-size: 14px !important;
+  }
+
+  .home-main .balance-card {
+    grid-template-columns: 1fr 46px !important;
+    gap: 12px !important;
+  }
+
+  .home-main .balance-grid > div {
+    padding: 0 8px !important;
+  }
+
+  .home-main .balance-grid strong,
+  .home-main .balance-total strong {
+    font-size: 20px !important;
+  }
+
+  .home-main .balance-grid span,
+  .home-main .balance-grid small {
+    font-size: 12px !important;
+  }
+
+  .home-main .balance-analytics {
+    width: 46px !important;
+    height: 46px !important;
+    border-radius: 15px !important;
+  }
+
+  .home-main .section-row h2 {
+    font-size: 24px !important;
+  }
+
+  .home-main .section-row button {
+    height: 42px !important;
+    padding: 0 13px !important;
+  }
+
+  .home-main .group-row {
+    grid-template-columns: 76px minmax(0, 1fr) !important;
+    grid-template-areas:
+      "thumb main"
+      "action balance" !important;
+    min-height: 164px !important;
+    gap: 16px !important;
+    padding: 18px !important;
+  }
+
+  .home-main .group-thumb {
+    grid-area: thumb !important;
+    width: 76px !important;
+    height: 76px !important;
+  }
+
+  .home-main .group-main {
+    grid-area: main !important;
+  }
+
+  .home-main .group-balance {
+    grid-area: balance !important;
+    align-items: flex-start !important;
+  }
+
+  .home-main .group-delete,
+  .home-main .group-menu {
+    grid-area: action !important;
+  }
+
+  .home-create-bar {
+    width: calc(100% - 32px) !important;
+  }
+}
