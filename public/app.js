@@ -57,7 +57,7 @@ function render() {
       <main class="mobile-main ${state.eventData ? "event-main" : "home-main"}">${state.eventData ? eventView() : eventsView()}</main>
       ${
         state.eventData
-          ? `<button class="home-create-bar event-create-bar" type="button" data-action="new-expense">${iconSvg("plus")}<span>הוצאה חדשה</span></button>`
+          ? ""
           : `<button class="home-create-bar" type="button" data-action="new-event">${iconSvg("plus")}<span>יצירת קבוצה חדשה</span></button>`
       }
     </div>
@@ -230,20 +230,20 @@ function eventView() {
       <div class="event-wallet-title">${iconSvg("wallet")}<span>החשבון שלי</span></div>
       <div class="event-wallet-grid">
         <div>
-          <span>חייבים לי</span>
-          <strong class="green">${formatMoney(owedToMe, event.base_currency)}</strong>
+          <span>אני חייב</span>
+          <strong class="red">${formatMoney(iOwe, event.base_currency)}</strong>
         </div>
         <div>
-          <span>אני חייב</span>
-          <strong>${formatMoney(iOwe, event.base_currency)}</strong>
+          <span>מאזן כללי</span>
+          <strong>${formatMoney(myAmount, event.base_currency)}</strong>
+        </div>
+        <div>
+          <span>חייבים לי</span>
+          <strong class="green">${formatMoney(owedToMe, event.base_currency)}</strong>
         </div>
       </div>
       <div class="event-wallet-total">
         <span>${iconSvg("chart")}</span>
-        <div>
-          <small>מאזן כללי</small>
-          <strong>${formatMoney(myAmount, event.base_currency)}</strong>
-        </div>
         <div>
           <small>סה"כ הוצאות</small>
           <strong>${formatMoney(settlement.totalExpenses, event.base_currency)}</strong>
@@ -276,6 +276,7 @@ function eventView() {
       </div>
       ${mobileExpensesView(expenses, members, event.base_currency)}
     </section>
+    <button class="event-add-expense-button" type="button" data-action="new-expense">${iconSvg("plus")}<span>הוצאה חדשה</span></button>
   `;
 }
 
