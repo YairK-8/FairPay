@@ -5743,7 +5743,8 @@ textarea::placeholder {
   gap: 24px !important;
   margin-top: 58px !important;
   padding: 0 !important;
-  direction: ltr !important;
+  flex-direction: row-reverse !important;
+  direction: rtl !important;
 }
 
 .home-main .profile-top > div {
@@ -5751,7 +5752,8 @@ textarea::placeholder {
   flex-direction: column !important;
   align-items: flex-start !important;
   min-width: 0 !important;
-  direction: ltr !important;
+  direction: rtl !important;
+  text-align: right !important;
 }
 
 .home-main .profile-avatar {
@@ -5784,6 +5786,7 @@ textarea::placeholder {
   font-weight: 500 !important;
   line-height: 1.2 !important;
   direction: ltr !important;
+  align-self: flex-start !important;
 }
 
 .home-main .hero-profile-button {
@@ -6112,7 +6115,7 @@ textarea::placeholder {
   }
 
   .home-main .profile-card {
-    min-height: 292px !important;
+    min-height: 300px !important;
     padding: 22px !important;
   }
 
@@ -6125,28 +6128,49 @@ textarea::placeholder {
   .home-main .profile-top {
     gap: 16px !important;
     margin-top: 54px !important;
+    justify-content: flex-end !important;
   }
 
   .home-main .profile-top h1 {
-    font-size: 25px !important;
+    font-size: 24px !important;
+    white-space: nowrap !important;
   }
 
   .home-main .profile-top p {
-    font-size: 14px !important;
+    max-width: 180px !important;
+    overflow: hidden !important;
+    font-size: 13px !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  .home-main .profile-avatar {
+    width: 58px !important;
+    height: 58px !important;
+    flex-basis: 58px !important;
+    font-size: 15px !important;
   }
 
   .home-main .balance-card {
-    grid-template-columns: 1fr 46px !important;
-    gap: 12px !important;
+    display: block !important;
+    margin-top: 28px !important;
+  }
+
+  .home-main .balance-grid {
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.1fr) minmax(0, 0.95fr) !important;
   }
 
   .home-main .balance-grid > div {
-    padding: 0 8px !important;
+    padding: 0 6px !important;
   }
 
   .home-main .balance-grid strong,
   .home-main .balance-total strong {
-    font-size: 20px !important;
+    width: 100% !important;
+    font-size: clamp(16px, 4.9vw, 18px) !important;
+    letter-spacing: 0 !important;
+    text-align: center !important;
+    white-space: nowrap !important;
   }
 
   .home-main .balance-grid span,
@@ -6155,9 +6179,13 @@ textarea::placeholder {
   }
 
   .home-main .balance-analytics {
-    width: 46px !important;
-    height: 46px !important;
+    position: absolute !important;
+    left: 22px !important;
+    bottom: 110px !important;
+    width: 42px !important;
+    height: 42px !important;
     border-radius: 15px !important;
+    opacity: 0.95 !important;
   }
 
   .home-main .section-row h2 {
