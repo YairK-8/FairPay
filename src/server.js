@@ -264,6 +264,7 @@ app.post("/api/events/:id/settlement-payments", requireUser, requireEventMember,
   const amountCents = cents(req.body?.amount || 0);
   if (!fromUserId || !toUserId || fromUserId === toUserId || amountCents <= 0) return res.status(400).json({ error: "invalid_settlement_payment" });
   assertMembers(req.event.id, [fromUserId, toUserId]);
+  if (toUserId !== Number(req.user.id)) return res.status(403).json({ error: "receiver_required" });
   db.prepare(
     "INSERT INTO settlement_payments (event_id, from_user_id, to_user_id, amount_cents, created_by) VALUES (?, ?, ?, ?, ?)"
   ).run(req.event.id, fromUserId, toUserId, amountCents, req.user.id);

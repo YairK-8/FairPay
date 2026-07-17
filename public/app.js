@@ -287,8 +287,10 @@ function mobileFlowsView(flows, currency) {
   if (!flows.length) return `<div class="home-empty"><strong>הכול מאוזן</strong><span>אין כרגע חובות פתוחים בקבוצה הזאת.</span></div>`;
   return `<div class="settlement-mobile-list">${flows
     .map(
-      (flow) => `
-        <button class="settlement-mobile-row" type="button" data-settlement-flow="${escapeHtml(`${flow.fromUserId}:${flow.toUserId}:${flow.amount}`)}">
+      (flow) => {
+        const canClose = Number(flow.toUserId) === Number(state.user?.id);
+        return `
+        <button class="settlement-mobile-row${canClose ? "" : " settlement-mobile-row-readonly"}" type="button" ${canClose ? `data-settlement-flow="${escapeHtml(`${flow.fromUserId}:${flow.toUserId}:${flow.amount}`)}"` : "disabled"}>
           <div class="settlement-person settlement-to">
             <small>מקבל</small>
             <strong>${escapeHtml(flow.toName)}</strong>
@@ -299,10 +301,11 @@ function mobileFlowsView(flows, currency) {
             <strong>${escapeHtml(flow.fromName)}</strong>
           </div>
           <div class="settlement-amount">
-            <small>סכום להעברה</small>
+            <small>${canClose ? "סכום להעברה" : "רק המקבל יכול לסגור"}</small>
             <b>${formatMoney(flow.amount, currency)}</b>
           </div>
-        </button>`
+        </button>`;
+      }
     )
     .join("")}</div>`;
 }

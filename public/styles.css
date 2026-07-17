@@ -8091,6 +8091,24 @@ textarea::placeholder {
   color: #757575;
 }
 
+.settlement-mobile-row-readonly,
+.settlement-mobile-row:disabled {
+  cursor: default;
+  opacity: 0.78;
+}
+
+.settlement-mobile-row-readonly .settlement-arrow-box,
+.settlement-mobile-row:disabled .settlement-arrow-box {
+  background: rgba(255, 255, 255, 0.62) !important;
+  color: #757575 !important;
+  box-shadow: none !important;
+}
+
+.settlement-mobile-row-readonly .settlement-arrow-box .bi,
+.settlement-mobile-row:disabled .settlement-arrow-box .bi {
+  color: #757575 !important;
+}
+
 .event-delete-action {
   width: 100%;
   min-height: 52px;
