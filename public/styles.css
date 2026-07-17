@@ -5853,6 +5853,7 @@ textarea::placeholder {
   width: auto !important;
   min-width: 0 !important;
   height: auto !important;
+  margin-top: 0 !important;
   padding: 0 18px !important;
   border-radius: 0 !important;
   background: transparent !important;
