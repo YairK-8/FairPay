@@ -14,11 +14,13 @@ const state = {
   drawer: null,
   inviteToken: location.pathname.startsWith("/invite/") ? location.pathname.split("/").pop() : null,
   inviteInfo: null,
-  message: ""
+  message: "",
+  toast: ""
 };
 
 const app = document.querySelector("#app");
 const fmt = new Intl.NumberFormat("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+let toastTimer;
 
 boot();
 registerServiceWorker();
@@ -61,6 +63,7 @@ function render() {
           : `<button class="home-create-bar" type="button" data-action="new-event">${iconSvg("plus")}<span>יצירת קבוצה חדשה</span></button>`
       }
     </div>
+    ${state.toast ? `<div class="app-toast" role="status">${escapeHtml(state.toast)}</div>` : ""}
     ${state.drawer ? drawerView() : ""}
   `;
   bind();
@@ -168,7 +171,7 @@ function eventsView() {
 function groupCard(event, index) {
   const isPositive = Number(event.userBalance || 0) >= 0;
   const thumbClass = `group-thumb thumb-${index % 4}`;
-  const canDelete = Number(event.owner_id) === Number(state.user?.id);
+  const canDelete = false;
   return `
     <button class="group-row" data-event-id="${event.id}">
       ${eventVisual(event, thumbClass)}
@@ -210,6 +213,7 @@ function groupMembersPreview(event) {
 
 function eventView() {
   const { event, members, expenses, settlement } = state.eventData;
+  const isOwner = Number(event.owner_id) === Number(state.user.id);
   const myBalance = settlement.balances.find((balance) => balance.userId === state.user.id);
   const myAmount = Number(myBalance?.balance || 0);
   const owedToMe = Math.max(myAmount, 0);
@@ -217,13 +221,10 @@ function eventView() {
   return `
     ${eventHeroBackground(event)}
     <header class="event-screen-header">
-      <button class="round-action" type="button" data-action="back-events" aria-label="חזרה לקבוצות">${iconSvg("back")}</button>
       <div>
-        ${eventVisual(event, "event-title-visual")}
         <h1>${escapeHtml(event.name)}</h1>
-        <p>${members.length} חברים · ${escapeHtml(event.base_currency)}</p>
+        <p>${members.length} חברים · החזר ב-${escapeHtml(event.base_currency)} · הוצאות ב-${escapeHtml(event.spending_currency || event.base_currency)}</p>
       </div>
-      <button class="round-action" type="button" data-action="invite" aria-label="העתק קישור הזמנה">${iconSvg("users")}</button>
     </header>
     ${state.message ? `<p class="notice event-notice">${escapeHtml(state.message)}</p>` : ""}
     <section class="event-wallet-card">
@@ -250,10 +251,6 @@ function eventView() {
         </div>
       </div>
     </section>
-    <div class="event-actions-row">
-      <button class="event-secondary-action" type="button" data-action="new-restaurant-expense"><span class="button-emoji">${iconSvg("restaurant")}</span><span>מסעדה</span></button>
-      <button class="event-secondary-action" type="button" data-action="invite">${iconSvg("users")}<span>הזמן חברים</span></button>
-    </div>
     ${openRestaurantBillsView(state.eventData.restaurantBills || [], members)}
     <section class="event-section">
       <div class="event-section-title">
@@ -276,7 +273,13 @@ function eventView() {
       </div>
       ${mobileExpensesView(expenses, members, event.base_currency)}
     </section>
-    <button class="event-add-expense-button" type="button" data-action="new-expense">${iconSvg("plus")}<span>הוצאה חדשה</span></button>
+    <div class="event-bottom-actions ${isOwner ? "owner-actions" : "member-actions"}">
+      <button class="event-bottom-action event-icon-action" type="button" data-action="back-events" aria-label="חזרה לבית">${iconSvg("home")}</button>
+      ${isOwner ? `<button class="event-bottom-action event-icon-action" type="button" data-action="edit-event" aria-label="עריכת קבוצה">${iconSvg("edit")}</button>` : ""}
+      ${isOwner ? `<button class="event-bottom-action event-icon-action" type="button" data-action="invite" aria-label="קישור הזמנה">${iconSvg("share")}</button>` : ""}
+      <button class="event-bottom-action event-add-expense-button" type="button" data-action="new-expense">${iconSvg("plus")}<span>הוצאה חדשה</span></button>
+      <button class="event-bottom-action restaurant-action" type="button" data-action="new-restaurant-expense">${iconSvg("restaurant")}<span>מסעדה</span></button>
+    </div>
   `;
 }
 
@@ -443,50 +446,13 @@ function expensesTable(expenses, members, baseCurrency) {
 function drawerView() {
   if (state.drawer === "profile") return profileDrawerView();
 
-  if (state.drawer === "event") {
-    return `
-      <div class="drawer-backdrop modal-backdrop">
-        <aside class="expense-modal create-group-modal">
-          <div class="expense-modal-handle"></div>
-          <div class="expense-modal-header">
-            <div>
-              <span>קבוצה חדשה</span>
-              <h2>יצירת קבוצה</h2>
-            </div>
-            <button class="round-action" type="button" data-action="close-drawer" aria-label="סגירה">${iconSvg("close")}</button>
-          </div>
-          <form class="expense-form" data-form="event">
-            <section class="expense-card">
-              <div class="expense-card-title">
-                <h3>פרטי הקבוצה</h3>
-                <small>שם ומטבע בסיס לחישובים</small>
-              </div>
-              <label class="profile-photo-picker group-photo-picker">
-                <input name="eventAvatarFile" type="file" accept="image/*" />
-                <span class="profile-photo-preview group-photo-preview">${
-                  state.eventAvatarDraft ? `<img src="${escapeHtml(state.eventAvatarDraft)}" alt="" />` : iconSvg("wallet")
-                }</span>
-                <b>הוסף תמונה לקבוצה</b>
-              </label>
-              <label class="expense-input">
-                <span>שם הקבוצה</span>
-                <input name="name" required placeholder="טיול בגאורגיה" />
-              </label>
-              <label class="expense-input">
-                <span>מטבע בסיס</span>
-                ${currencySearchInput("baseCurrency", "ILS")}
-              </label>
-            </section>
-            <button class="expense-save" type="submit">${iconSvg("plus")}<span>יצירת קבוצה</span></button>
-          </form>
-        </aside>
-      </div>`;
-  }
+  if (state.drawer === "event" || state.drawer === "event-edit") return eventDrawerView(state.drawer === "event-edit");
 
   const members = state.eventData?.members || [];
   const event = state.eventData?.event;
   const baseCurrency = event?.base_currency || "ILS";
-  if (state.drawer === "restaurant-setup") return restaurantSetupDrawerView(baseCurrency);
+  const spendingCurrency = event?.spending_currency || baseCurrency;
+  if (state.drawer === "restaurant-setup") return restaurantSetupDrawerView(baseCurrency, spendingCurrency);
   if (state.drawer === "restaurant-bill") return restaurantBillDrawerView(members, baseCurrency);
   if (state.drawer === "expense-details") return expenseDetailsDrawerView(members, baseCurrency);
   if (state.drawer === "settlement-payment") return settlementPaymentDrawerView(baseCurrency);
@@ -497,7 +463,7 @@ function drawerView() {
         <div class="expense-modal-header">
           <div>
             <span>הוצאה חדשה</span>
-            <h2>מה שילמתם?</h2>
+            <h2>מה שילמת?</h2>
           </div>
           <button class="round-action" type="button" data-action="close-drawer" aria-label="סגירה">${iconSvg("close")}</button>
         </div>
@@ -546,7 +512,7 @@ function drawerView() {
               </label>
               <label class="expense-input">
                 <span>מטבע</span>
-                ${currencySearchInput("currency", baseCurrency)}
+                ${currencySearchInput("currency", spendingCurrency)}
               </label>
             </div>
             <div class="rate-panel">
@@ -565,7 +531,7 @@ function drawerView() {
           <section class="expense-card">
             <div class="expense-card-title">
               <h3>משתתפים וחלוקה</h3>
-              <small>כולם מסומנים אוטומטית</small>
+              <small>כולא מסומנים אוטומטית</small>
             </div>
             <div class="split-switch" role="radiogroup" aria-label="סוג חלוקה">
               <label><input type="radio" name="splitType" value="equal" checked /><span>חלוקה שווה</span></label>
@@ -642,7 +608,7 @@ function profileDrawerView() {
             </label>
           </section>
           <button class="expense-save" type="submit">${iconSvg("check")}<span>שמור פרטים</span></button>
-          <button class="profile-logout" type="button" data-action="logout">${iconSvg("back")}<span>יציאה מהחשבון</span></button>
+          <button class="profile-logout" type="button" data-action="logout">${iconSvg("back")}<span>יציםה מהחשבון</span></button>
         </form>
       </aside>
     </div>`;
@@ -727,7 +693,98 @@ function settlementPaymentDrawerView(baseCurrency) {
     </div>`;
 }
 
-function restaurantSetupDrawerView(baseCurrency) {
+function eventDrawerView(isEdit = false) {
+  const event = isEdit ? state.eventData?.event : null;
+  const title = isEdit ? "עריכת קבוצה" : "יצירת קבוצה";
+  const subtitle = isEdit ? "עדכון פרטי הקבוצה" : "קבוצה חדשה";
+  const name = event?.name || "";
+  const baseCurrency = event?.base_currency || "ILS";
+  const spendingCurrency = event?.spending_currency || "USD";
+  const avatar = state.eventAvatarDraft || event?.avatar_url || "";
+  return `
+    <div class="drawer-backdrop modal-backdrop">
+      <aside class="expense-modal create-group-modal">
+        <div class="expense-modal-handle"></div>
+        <div class="expense-modal-header">
+          <div>
+            <span>${subtitle}</span>
+            <h2>${title}</h2>
+          </div>
+          <button class="round-action" type="button" data-action="close-drawer" aria-label="סגירה">${iconSvg("close")}</button>
+        </div>
+        <form class="expense-form" data-form="event" data-mode="${isEdit ? "edit" : "create"}">
+          <section class="expense-card">
+            <div class="expense-card-title">
+              <h3>פרטי הקבוצה</h3>
+              <small>שם, תמונה ומטבעות ברירת מחדל</small>
+            </div>
+            <label class="profile-photo-picker group-photo-picker">
+              <input name="eventAvatarFile" type="file" accept="image/*" />
+              <span class="profile-photo-preview group-photo-preview">${avatar ? `<img src="${escapeHtml(avatar)}" alt="" />` : iconSvg("wallet")}</span>
+              <b>${isEdit ? "החלף תמונת קבוצה" : "הוסף תמונה לקבוצה"}</b>
+            </label>
+            <label class="expense-input">
+              <span>שם הקבוצה</span>
+              <input name="name" required placeholder="טיול בגאורגיה" value="${escapeHtml(name)}" />
+            </label>
+            <label class="expense-input">
+              <span>מטבע התחשבנות</span>
+              <small>באיזה מטבע מחזירים כסף בסוף, למשל ILS</small>
+              ${currencySearchInput("baseCurrency", baseCurrency)}
+            </label>
+            <label class="expense-input">
+              <span>מטבע הוצאות ברירת מחדל</span>
+              <small>באיזה מטבע רוב ההוצאות נרשמות, למשל USD</small>
+              ${currencySearchInput("spendingCurrency", spendingCurrency)}
+            </label>
+          </section>
+          <button class="expense-save" type="submit">${iconSvg(isEdit ? "edit" : "plus")}<span>${isEdit ? "שמירת שינויים" : "יצירת קבוצה"}</span></button>
+          ${
+            isEdit
+              ? `<button class="event-delete-action" type="button" data-delete-event="${event.id}">${iconSvg("trash")}<span>מחיקת קבוצה</span></button>`
+              : ""
+          }
+        </form>
+      </aside>
+    </div>`;
+}
+
+function inviteDrawerView() {
+  const event = state.eventData?.event;
+  return `
+    <div class="drawer-backdrop modal-backdrop">
+      <aside class="expense-modal invite-modal">
+        <div class="expense-modal-handle"></div>
+        <div class="expense-modal-header">
+          <div>
+            <span>${escapeHtml(event?.name || "קבוצה")}</span>
+            <h2>קישור הזמנה</h2>
+          </div>
+          <button class="round-action" type="button" data-action="close-drawer" aria-label="סגירה">${iconSvg("close")}</button>
+        </div>
+        <form class="expense-form" data-form="invite">
+          <section class="expense-card">
+            <div class="expense-card-title">
+              <h3>תוקף הקישור</h3>
+              <small>קישור חדש מבטל את הקישור הקודא שנשלח לקבוצה הזאת</small>
+            </div>
+            <label class="expense-input">
+              <span>הקישור יהיה פעיל למשך</span>
+              <select name="expiresInHours">
+                <option value="1">שעה אחת</option>
+                <option value="24">יוא אחד</option>
+                <option value="168" selected>7 ימים</option>
+                <option value="720">30 ימים</option>
+              </select>
+            </label>
+          </section>
+          <button class="expense-save" type="submit">${iconSvg("share")}<span>יצירת קישור והעתקה</span></button>
+        </form>
+      </aside>
+    </div>`;
+}
+
+function restaurantSetupDrawerView(baseCurrency, spendingCurrency = baseCurrency) {
   return `
     <div class="drawer-backdrop modal-backdrop">
       <aside class="expense-modal">
@@ -751,7 +808,7 @@ function restaurantSetupDrawerView(baseCurrency) {
             </div>
             <label class="expense-input">
               <span>מטבע המסעדה</span>
-              ${currencySearchInput("currency", baseCurrency)}
+              ${currencySearchInput("currency", spendingCurrency)}
             </label>
           </section>
           <button class="expense-save" type="submit">${iconSvg("check")}<span>פתח מסעדה</span></button>
@@ -795,7 +852,7 @@ function restaurantBillDrawerView(members, baseCurrency) {
           <section class="expense-card">
             <div class="expense-card-title">
               <h3>מי מילא כמה</h3>
-              <small>מתעדכן אצל כולם</small>
+              <small>מתעדכן אצל כולא</small>
             </div>
             <div class="restaurant-orders">
               ${members
@@ -817,11 +874,11 @@ function restaurantBillDrawerView(members, baseCurrency) {
           <section class="expense-card">
             <div class="expense-card-title">
               <h3>סגירת חשבון</h3>
-              <small>רק אחרי שמישהו שילם בפועל</small>
+              <small>רק אחרי שמישהו שילא בפועל</small>
             </div>
             <div class="expense-two">
               <label class="expense-input">
-                <span>מי שילם</span>
+                <span>מי שילא</span>
                 <select name="payerId">${members.map((member) => `<option value="${member.id}" ${member.id === state.user.id ? "selected" : ""}>${escapeHtml(member.name)}</option>`).join("")}</select>
               </label>
               <label class="expense-input">
@@ -842,7 +899,12 @@ function restaurantBillDrawerView(members, baseCurrency) {
 
 function bind() {
   document.querySelector('[data-form="auth"]')?.addEventListener("submit", submitAuth);
-  document.querySelector('[data-form="event"]')?.addEventListener("submit", submitEvent);
+  const eventForm = document.querySelector('[data-form="event"]');
+  eventForm?.addEventListener("submit", submitEvent);
+  eventForm?.querySelector(".expense-save")?.addEventListener("click", async (event) => {
+    event.preventDefault();
+    await submitEvent({ preventDefault() {}, currentTarget: eventForm });
+  });
   const expenseForm = document.querySelector('[data-form="expense"]');
   expenseForm?.addEventListener("submit", submitExpense);
   if (expenseForm) bindExpenseForm(expenseForm);
@@ -868,6 +930,10 @@ function bind() {
         state.drawer = "profile";
       }
       if (action === "new-event") state.drawer = "event";
+      if (action === "edit-event") {
+        state.eventAvatarDraft = null;
+        state.drawer = "event-edit";
+      }
       if (action === "new-expense") state.drawer = "expense";
       if (action === "new-restaurant-expense") state.drawer = "restaurant-setup";
       if (action === "close-drawer") {
@@ -1016,7 +1082,7 @@ async function refreshExchangeRate(form) {
       form.dataset.rateReady = "true";
     } catch (__error) {
       input.value = "1";
-      label.textContent = "לא הצלחנו להביא שער אוטומטי. נסה שוב בעוד רגע.";
+      label.textContent = "לא הצלחנו להבים שער אוטומטי. נסה שוב בעוד רגע.";
       form.dataset.rateReady = "false";
     }
   }
@@ -1241,15 +1307,34 @@ function filterCurrencyOptions(options, query) {
 
 async function submitEvent(event) {
   event.preventDefault();
-  const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
-  payload.baseCurrency = currencyCodeFromInput(payload.baseCurrency || "ILS");
-  payload.avatarUrl = state.eventAvatarDraft || "";
-  payload.emoji = "";
-  const data = await api("/api/events", { method: "POST", body: JSON.stringify(payload) });
+  const formElement = event.currentTarget;
+  const isEdit = formElement.dataset.mode === "edit";
+  try {
+    const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
+    payload.baseCurrency = currencyCodeFromInput(payload.baseCurrency || "ILS");
+    payload.spendingCurrency = currencyCodeFromInput(payload.spendingCurrency || "USD");
+    payload.avatarUrl = state.eventAvatarDraft || (isEdit ? state.eventData?.event?.avatar_url || "" : "");
+    payload.emoji = "";
+    const data = await api(isEdit ? `/api/events/${state.activeEventId}` : "/api/events", { method: isEdit ? "PUT" : "POST", body: JSON.stringify(payload) });
+    state.drawer = null;
+    state.eventAvatarDraft = null;
+    await loadEvents();
+    await openEvent(isEdit ? state.activeEventId : data.event.id);
+  } catch (error) {
+    state.message = isEdit
+      ? "לא הצלחנו לשמור את השינויים. אם השרת כבר פתוח, צריך להפעיל אותו מחדש כדי לטעון את עדכון עריכת הקבוצה."
+      : "לא הצלחנו ליצור את הקבוצה. נסה שוב בעוד רגע.";
+    showToast("השמירה נכשלה");
+    render();
+  }
+}
+
+async function submitInvite(event) {
+  event.preventDefault();
+  const form = new FormData(event.currentTarget);
+  await createInvite(Number(form.get("expiresInHours") || 168));
   state.drawer = null;
-  state.eventAvatarDraft = null;
-  await loadEvents();
-  await openEvent(data.event.id);
+  render();
 }
 
 async function submitExpense(event) {
@@ -1264,7 +1349,7 @@ async function submitExpense(event) {
   const currency = currencyCodeFromInput(form.get("currency"));
   const baseCurrency = element.dataset.baseCurrency || "ILS";
   if (currency !== baseCurrency && element.dataset.rateReady !== "true") {
-    state.message = "לא הצלחנו להביא שער המרה אוטומטי. נסה שוב בעוד רגע.";
+    state.message = "לא הצלחנו להבים שער המרה אוטומטי. נסה שוב בעוד רגע.";
     render();
     return;
   }
@@ -1300,7 +1385,7 @@ async function submitRestaurantExpense(event) {
   const currency = currencyCodeFromInput(form.get("currency"));
   const baseCurrency = element.dataset.baseCurrency || "ILS";
   if (currency !== baseCurrency && element.dataset.rateReady !== "true") {
-    state.message = "לא הצלחנו להביא שער המרה אוטומטי למסעדה. נסה שוב בעוד רגע.";
+    state.message = "לא הצלחנו להבים שער המרה אוטומטי למסעדה. נסה שוב בעוד רגע.";
     render();
     return;
   }
@@ -1393,7 +1478,7 @@ async function submitSettlementPayment(event) {
   state.eventData = data.event;
   state.drawer = null;
   state.activeSettlementFlow = null;
-  state.message = "התשלום נשמר והחוב עודכן.";
+  state.message = "התשלוא נשמר והחוב עודכן.";
   render();
 }
 
@@ -1461,9 +1546,47 @@ async function deleteExpense(id) {
 }
 
 async function createInvite() {
-  const data = await api(`/api/events/${state.activeEventId}/invites`, { method: "POST", body: "{}" });
-  await navigator.clipboard?.writeText(data.inviteUrl);
-  state.message = `קישור הצטרפות לקבוצה "${data.eventName}" נוצר והועתק. כל מי שיפתח אותו ויתחבר יצורף לקבוצה: ${data.inviteUrl}`;
+  const expiresInHours = 24;
+  const data = await api(`/api/events/${state.activeEventId}/invites`, { method: "POST", body: JSON.stringify({ expiresInHours }) });
+  state.message = "";
+  try {
+    await copyText(data.inviteUrl);
+  } catch (_error) {
+    // Browser automation and some local contexts can block clipboard writes,
+    // but the invite was still created and real HTTPS taps can copy normally.
+  }
+  showToast("הקישור הועתק");
+}
+
+async function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const input = document.createElement("textarea");
+  input.value = text;
+  input.setAttribute("readonly", "");
+  input.style.position = "fixed";
+  input.style.inset = "0 auto auto 0";
+  input.style.width = "1px";
+  input.style.height = "1px";
+  input.style.opacity = "0";
+  document.body.appendChild(input);
+  input.focus();
+  input.select();
+  input.setSelectionRange(0, input.value.length);
+  const copied = document.execCommand("copy");
+  input.remove();
+  if (!copied) throw new Error("copy_failed");
+}
+
+function showToast(text) {
+  clearTimeout(toastTimer);
+  state.toast = text;
+  toastTimer = setTimeout(() => {
+    state.toast = "";
+    render();
+  }, 2200);
 }
 
 async function joinInvite() {
@@ -1799,6 +1922,8 @@ function iconSvg(name) {
     bell: "bi-bell",
     wallet: "bi-wallet2",
     chart: "bi-bar-chart",
+    home: "bi-house",
+    edit: "bi-pencil-square",
     plus: "bi-plus-lg",
     receipt: "bi-receipt",
     trash: "bi-trash3",
@@ -1807,6 +1932,7 @@ function iconSvg(name) {
     back: "bi-arrow-right",
     arrow: "bi-arrow-left",
     settlementArrow: "bi-arrow-right",
+    share: "bi-share",
     restaurant: "bi-cup-hot",
     taxi: "bi-taxi-front",
     transport: "bi-train-front",

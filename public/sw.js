@@ -1,9 +1,9 @@
-const CACHE_NAME = "fairpay-shell-v81";
+const CACHE_NAME = "fairpay-shell-v118";
 const APP_SHELL = [
   "/",
   "/index.html",
-  "/styles.css?v=81",
-  "/app.js?v=81",
+  "/styles.css?v=118",
+  "/app.js?v=118",
   "/manifest.json",
   "/APP-icon.png",
   "/icon-512.png",

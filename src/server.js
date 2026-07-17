@@ -112,16 +112,17 @@ app.get("/api/events", requireUser, (req, res) => {
 });
 
 app.post("/api/events", requireUser, (req, res) => {
-  const { name, baseCurrency = "ILS", avatarUrl, emoji } = req.body || {};
+  const { name, baseCurrency = "ILS", spendingCurrency = "USD", avatarUrl, emoji } = req.body || {};
   if (!name) return res.status(400).json({ error: "missing_name" });
 
   const tx = db.transaction(() => {
     const event = db
-      .prepare("INSERT INTO events (owner_id, name, base_currency, avatar_url, emoji) VALUES (?, ?, ?, ?, ?)")
+      .prepare("INSERT INTO events (owner_id, name, base_currency, spending_currency, avatar_url, emoji) VALUES (?, ?, ?, ?, ?, ?)")
       .run(
         req.user.id,
         String(name).trim(),
-        String(baseCurrency).trim().toUpperCase(),
+        normalizeCurrency(baseCurrency, "ILS"),
+        normalizeCurrency(spendingCurrency, "USD"),
         cleanAvatar(avatarUrl),
         cleanEmoji(emoji)
       );
@@ -136,6 +137,22 @@ app.get("/api/events/:id", requireUser, requireEventMember, (req, res) => {
   res.json(buildEventPayload(req.event.id));
 });
 
+app.put("/api/events/:id", requireUser, requireEventMember, (req, res) => {
+  if (Number(req.event.owner_id) !== Number(req.user.id)) return res.status(403).json({ error: "owner_required" });
+  const name = cleanText(req.body?.name);
+  const baseCurrency = normalizeCurrency(req.body?.baseCurrency, req.event.base_currency || "ILS");
+  const spendingCurrency = normalizeCurrency(req.body?.spendingCurrency, req.event.spending_currency || "USD");
+  const avatarUrl = cleanAvatar(req.body?.avatarUrl);
+  const emoji = cleanEmoji(req.body?.emoji);
+  if (!name) return res.status(400).json({ error: "missing_name" });
+  db.prepare(
+    `UPDATE events
+     SET name = ?, base_currency = ?, spending_currency = ?, avatar_url = ?, emoji = ?
+     WHERE id = ? AND owner_id = ?`
+  ).run(name, baseCurrency, spendingCurrency, avatarUrl, emoji, req.event.id, req.user.id);
+  res.json({ event: getEventForUser(req.event.id, req.user.id), payload: buildEventPayload(req.event.id) });
+});
+
 app.delete("/api/events/:id", requireUser, requireEventMember, (req, res) => {
   if (Number(req.event.owner_id) !== Number(req.user.id)) return res.status(403).json({ error: "owner_required" });
   db.prepare("DELETE FROM events WHERE id = ? AND owner_id = ?").run(req.event.id, req.user.id);
@@ -143,18 +160,25 @@ app.delete("/api/events/:id", requireUser, requireEventMember, (req, res) => {
 });
 
 app.post("/api/events/:id/invites", requireUser, requireEventMember, (req, res) => {
+  if (Number(req.event.owner_id) !== Number(req.user.id)) return res.status(403).json({ error: "owner_required" });
   const token = crypto.randomBytes(24).toString("base64url");
-  db.prepare("INSERT INTO event_invites (token, event_id, created_by) VALUES (?, ?, ?)").run(token, req.event.id, req.user.id);
-  res.status(201).json({ token, inviteUrl: `${config.appUrl}/invite/${token}`, eventName: req.event.name });
+  const expiresAt = inviteExpiresAt();
+  db.transaction(() => {
+    db.prepare("UPDATE event_invites SET revoked_at = CURRENT_TIMESTAMP WHERE event_id = ? AND revoked_at IS NULL").run(req.event.id);
+    db.prepare("INSERT INTO event_invites (token, event_id, created_by, expires_at) VALUES (?, ?, ?, ?)").run(token, req.event.id, req.user.id, expiresAt);
+  })();
+  res.status(201).json({ token, inviteUrl: `${config.appUrl}/invite/${token}`, eventName: req.event.name, expiresAt });
 });
 
 app.get("/api/invites/:token", (req, res) => {
   const invite = db
     .prepare(
-      `SELECT event_invites.token, events.id AS eventId, events.name AS eventName, events.base_currency AS eventCurrency
+      `SELECT event_invites.token, event_invites.expires_at AS expiresAt, events.id AS eventId, events.name AS eventName, events.base_currency AS eventCurrency
        FROM event_invites
        JOIN events ON events.id = event_invites.event_id
-       WHERE event_invites.token = ?`
+       WHERE event_invites.token = ?
+         AND event_invites.revoked_at IS NULL
+         AND (event_invites.expires_at IS NULL OR event_invites.expires_at > CURRENT_TIMESTAMP)`
     )
     .get(req.params.token);
   if (!invite) return res.status(404).json({ error: "invite_not_found" });
@@ -162,7 +186,15 @@ app.get("/api/invites/:token", (req, res) => {
 });
 
 app.post("/api/invites/:token/join", requireUser, (req, res) => {
-  const invite = db.prepare("SELECT * FROM event_invites WHERE token = ?").get(req.params.token);
+  const invite = db
+    .prepare(
+      `SELECT *
+       FROM event_invites
+       WHERE token = ?
+         AND revoked_at IS NULL
+         AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)`
+    )
+    .get(req.params.token);
   if (!invite) return res.status(404).json({ error: "invite_not_found" });
   db.prepare("INSERT OR IGNORE INTO event_members (event_id, user_id) VALUES (?, ?)").run(invite.event_id, req.user.id);
   res.json({ event: getEventForUser(invite.event_id, req.user.id) });
@@ -635,4 +667,15 @@ function cleanAvatar(value) {
 function cleanEmoji(value) {
   const emoji = cleanText(value);
   return emoji ? emoji.slice(0, 8) : "";
+}
+
+function normalizeCurrency(value, fallback = "ILS") {
+  const currency = String(value || fallback).trim().toUpperCase();
+  return /^[A-Z]{3}$/.test(currency) ? currency : fallback;
+}
+
+function inviteExpiresAt(hours = 24) {
+  const numericHours = Number(hours || 24);
+  const safeHours = Number.isFinite(numericHours) && numericHours > 0 ? Math.min(numericHours, 24 * 30) : 24;
+  return new Date(Date.now() + safeHours * 60 * 60 * 1000).toISOString().slice(0, 19).replace("T", " ");
 }

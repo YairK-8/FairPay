@@ -36,6 +36,7 @@ function migrate(db) {
       owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
       base_currency TEXT NOT NULL DEFAULT 'ILS',
+      spending_currency TEXT NOT NULL DEFAULT 'USD',
       avatar_url TEXT,
       emoji TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -53,6 +54,8 @@ function migrate(db) {
       token TEXT PRIMARY KEY,
       event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
       created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      expires_at TEXT,
+      revoked_at TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -125,6 +128,9 @@ function migrate(db) {
   ensureColumn(db, "users", "avatar_url", "TEXT");
   ensureColumn(db, "events", "avatar_url", "TEXT");
   ensureColumn(db, "events", "emoji", "TEXT");
+  ensureColumn(db, "events", "spending_currency", "TEXT NOT NULL DEFAULT 'USD'");
+  ensureColumn(db, "event_invites", "expires_at", "TEXT");
+  ensureColumn(db, "event_invites", "revoked_at", "TEXT");
 }
 
 function ensureColumn(db, table, column, definition) {
