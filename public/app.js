@@ -336,8 +336,9 @@ function openRestaurantBillsView(bills, members) {
           .map((bill) => {
             const myItem = bill.items.find((item) => item.userId === state.user.id);
             const filledCount = bill.items.filter((item) => item.amountCents > 0).length;
+            const canDelete = bill.totalCents === 0 && !bill.items.some((item) => item.amountCents > 0);
             return `
-              <button class="restaurant-bill-row" type="button" data-restaurant-bill-id="${bill.id}" data-restaurant-empty="${bill.totalCents === 0 && !bill.items.some((item) => item.amountCents > 0) ? "true" : "false"}">
+              <button class="restaurant-bill-row" type="button" data-restaurant-bill-id="${bill.id}" data-restaurant-empty="${canDelete ? "true" : "false"}">
                 <span class="expense-icon expense-icon-restaurant">${iconSvg("restaurant")}</span>
                 <span class="restaurant-bill-main">
                   <strong>${escapeHtml(bill.title)}</strong>
@@ -347,6 +348,11 @@ function openRestaurantBillsView(bills, members) {
                   <small>סה"כ</small>
                   <b>${bill.hasMixedCurrencies ? "מטבעות שונים" : formatMoney(bill.total, bill.currency)}</b>
                 </span>
+                ${
+                  canDelete
+                    ? `<span class="restaurant-bill-delete" data-delete-restaurant-bill="${bill.id}" aria-label="מחיקת מסעדה">${iconSvg("close")}</span>`
+                    : ""
+                }
               </button>`;
           })
           .join("")}
@@ -701,6 +707,8 @@ function eventDrawerView(isEdit = false) {
   const baseCurrency = event?.base_currency || "ILS";
   const spendingCurrency = event?.spending_currency || "USD";
   const avatar = state.eventAvatarDraft || event?.avatar_url || "";
+  const members = state.eventData?.members || [];
+  const balances = state.eventData?.settlement?.balances || [];
   return `
     <div class="drawer-backdrop modal-backdrop">
       <aside class="expense-modal create-group-modal">
@@ -738,6 +746,7 @@ function eventDrawerView(isEdit = false) {
               ${currencySearchInput("spendingCurrency", spendingCurrency)}
             </label>
           </section>
+          ${isEdit ? eventMembersEditorView(members, balances, baseCurrency) : ""}
           <button class="expense-save" type="submit">${iconSvg(isEdit ? "edit" : "plus")}<span>${isEdit ? "שמירת שינויים" : "יצירת קבוצה"}</span></button>
           ${
             isEdit
@@ -747,6 +756,39 @@ function eventDrawerView(isEdit = false) {
         </form>
       </aside>
     </div>`;
+}
+
+function eventMembersEditorView(members, balances, currency) {
+  return `
+    <section class="expense-card event-members-editor">
+      <div class="expense-card-title">
+        <h3>משתתפי הקבוצה</h3>
+        <small>אפשר להסיר רק משתתף בלי חוב פתוח</small>
+      </div>
+      <div class="event-member-edit-list">
+        ${members
+          .map((member) => {
+            const isOwner = Number(member.id) === Number(state.eventData?.event?.owner_id);
+            const balance = balances.find((item) => Number(item.userId) === Number(member.id));
+            const balanceCents = Number(balance?.balanceCents || 0);
+            const canRemove = !isOwner && balanceCents === 0;
+            return `
+              <div class="event-member-edit-row">
+                ${avatarMarkup(member, "mini")}
+                <span class="event-member-edit-main">
+                  <strong>${escapeHtml(member.name)}</strong>
+                  <small>${isOwner ? "יוצר הקבוצה" : balanceCents === 0 ? "אין חוב פתוח" : `מאזן פתוח ${formatMoney(balance?.balance || 0, currency)}`}</small>
+                </span>
+                ${
+                  canRemove
+                    ? `<button class="member-remove-button" type="button" data-remove-member="${member.id}" aria-label="הסרת ${escapeHtml(member.name)}">${iconSvg("close")}</button>`
+                    : `<span class="member-remove-lock">${isOwner ? iconSvg("lock") : formatMoney(balance?.balance || 0, currency)}</span>`
+                }
+              </div>`;
+          })
+          .join("")}
+      </div>
+    </section>`;
 }
 
 function inviteDrawerView() {
@@ -962,6 +1004,14 @@ function bind() {
     });
   });
 
+  document.querySelectorAll("[data-remove-member]").forEach((element) => {
+    element.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      await removeEventMember(element.dataset.removeMember);
+    });
+  });
+
   document.querySelectorAll("[data-delete-expense]").forEach((element) => {
     element.addEventListener("click", (event) => {
       event.stopPropagation();
@@ -993,21 +1043,14 @@ function bind() {
       state.drawer = "restaurant-bill";
       render();
     });
-    if (element.dataset.restaurantEmpty === "true") bindSwipeDeleteRestaurant(element);
   });
-}
 
-function bindSwipeDeleteRestaurant(element) {
-  let startX = 0;
-  element.addEventListener("pointerdown", (event) => {
-    startX = event.clientX;
-  });
-  element.addEventListener("pointerup", async (event) => {
-    if (startX - event.clientX > 60) {
+  document.querySelectorAll("[data-delete-restaurant-bill]").forEach((element) => {
+    element.addEventListener("click", async (event) => {
       event.preventDefault();
       event.stopPropagation();
-      await deleteRestaurantBill(element.dataset.restaurantBillId);
-    }
+      await deleteRestaurantBill(element.dataset.deleteRestaurantBill);
+    });
   });
 }
 
@@ -1501,6 +1544,23 @@ async function deleteEvent(id) {
   state.message = "הקבוצה נמחקה.";
   await loadEvents();
   render();
+}
+
+async function removeEventMember(memberId) {
+  try {
+    const data = await api(`/api/events/${state.activeEventId}/members/${memberId}`, { method: "DELETE" });
+    state.eventData = data.event;
+    state.message = "";
+    showToast("המשתתף הוסר מהקבוצה");
+    render();
+  } catch (error) {
+    const blockedErrors = ["member_has_open_balance", "member_has_open_restaurant_amount"];
+    state.message = blockedErrors.includes(error.message)
+      ? "אי אפשר להסיר משתתף שיש לו חוב או סכום פתוח בקבוצה."
+      : "לא הצלחנו להסיר את המשתתף. נסה שוב בעוד רגע.";
+    showToast("ההסרה נכשלה");
+    render();
+  }
 }
 
 async function loadEvents() {

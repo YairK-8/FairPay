@@ -159,6 +159,34 @@ app.delete("/api/events/:id", requireUser, requireEventMember, (req, res) => {
   res.json({ ok: true });
 });
 
+app.delete("/api/events/:id/members/:memberId", requireUser, requireEventMember, (req, res) => {
+  if (Number(req.event.owner_id) !== Number(req.user.id)) return res.status(403).json({ error: "owner_required" });
+  const memberId = Number(req.params.memberId);
+  if (!Number.isInteger(memberId)) return res.status(400).json({ error: "invalid_member" });
+  if (memberId === Number(req.event.owner_id)) return res.status(400).json({ error: "cannot_remove_owner" });
+
+  const member = db.prepare("SELECT * FROM event_members WHERE event_id = ? AND user_id = ?").get(req.event.id, memberId);
+  if (!member) return res.status(404).json({ error: "member_not_found" });
+
+  const balance = buildSettlement(req.event.id).balances.find((item) => Number(item.userId) === memberId);
+  if (balance && balance.balanceCents !== 0) return res.status(409).json({ error: "member_has_open_balance" });
+
+  const openRestaurantAmount = db
+    .prepare(
+      `SELECT COALESCE(SUM(restaurant_bill_items.amount_cents), 0) AS total
+       FROM restaurant_bill_items
+       JOIN restaurant_bills ON restaurant_bills.id = restaurant_bill_items.bill_id
+       WHERE restaurant_bills.event_id = ?
+         AND restaurant_bills.status = 'open'
+         AND restaurant_bill_items.user_id = ?`
+    )
+    .get(req.event.id, memberId).total;
+  if (openRestaurantAmount > 0) return res.status(409).json({ error: "member_has_open_restaurant_amount" });
+
+  db.prepare("DELETE FROM event_members WHERE event_id = ? AND user_id = ?").run(req.event.id, memberId);
+  res.json({ ok: true, event: buildEventPayload(req.event.id) });
+});
+
 app.post("/api/events/:id/invites", requireUser, requireEventMember, (req, res) => {
   if (Number(req.event.owner_id) !== Number(req.user.id)) return res.status(403).json({ error: "owner_required" });
   const token = crypto.randomBytes(24).toString("base64url");
