@@ -5847,25 +5847,45 @@ textarea::placeholder {
   border-inline-start: 1px solid rgba(31, 31, 31, 0.1) !important;
 }
 
+.home-main .balance-grid > .balance-total,
+.home-main .balance-grid > div.balance-total {
+  display: block !important;
+  width: auto !important;
+  min-width: 0 !important;
+  height: auto !important;
+  padding: 0 18px !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  text-align: center !important;
+}
+
 .home-main .balance-grid > div:first-child {
   border-inline-start: 0 !important;
 }
 
 .home-main .balance-grid span,
-.home-main .balance-grid small {
+.home-main .balance-grid small,
+.home-main .balance-grid > .balance-total small {
   display: block !important;
   margin: 0 0 8px !important;
   color: #757575 !important;
   font-size: 15px !important;
   font-weight: 700 !important;
+  line-height: 1.05 !important;
+  text-align: center !important;
 }
 
-.home-main .balance-grid strong {
+.home-main .balance-grid strong,
+.home-main .balance-grid > .balance-total strong {
   display: block !important;
+  width: 100% !important;
   color: #1f1f1f !important;
   font-size: 26px !important;
   font-weight: 850 !important;
   line-height: 1 !important;
+  text-align: center !important;
+  white-space: nowrap !important;
 }
 
 .home-main .balance-total strong {
@@ -6161,21 +6181,36 @@ textarea::placeholder {
   }
 
   .home-main .balance-grid > div {
-    padding: 0 6px !important;
+    padding: 0 4px !important;
+  }
+
+  .home-main .balance-grid > .balance-total,
+  .home-main .balance-grid > div.balance-total {
+    display: block !important;
+    padding: 0 4px !important;
+    text-align: center !important;
   }
 
   .home-main .balance-grid strong,
-  .home-main .balance-total strong {
+  .home-main .balance-total strong,
+  .home-main .balance-grid > .balance-total strong {
     width: 100% !important;
-    font-size: clamp(16px, 4.9vw, 18px) !important;
+    display: block !important;
+    font-size: clamp(15px, 4.25vw, 17px) !important;
     letter-spacing: 0 !important;
     text-align: center !important;
     white-space: nowrap !important;
   }
 
   .home-main .balance-grid span,
-  .home-main .balance-grid small {
-    font-size: 12px !important;
+  .home-main .balance-grid small,
+  .home-main .balance-grid > .balance-total small {
+    display: block !important;
+    margin-bottom: 7px !important;
+    font-size: 11px !important;
+    line-height: 1.05 !important;
+    text-align: center !important;
+    white-space: normal !important;
   }
 
   .home-main .balance-analytics {
