@@ -1,4 +1,5 @@
 import express from "express";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
@@ -11,6 +12,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const config = getConfig();
 const db = openDatabase(config.dbPath);
 const app = express();
+const ADMIN_COOKIE = "admin_sid";
+const ADMIN_SESSION_HOURS = 12;
 
 if (config.trustProxy) app.set("trust proxy", 1);
 app.use(express.json({ limit: "5mb" }));
@@ -355,6 +358,63 @@ app.get("/api/exchange-rate", requireUser, async (req, res, next) => {
   }
 });
 
+app.post("/api/admin/login", (req, res) => {
+  const account = getAdminAccount();
+  if (!account) return res.status(503).json({ error: "admin_not_configured" });
+  const username = String(req.body?.username || "").trim();
+  const password = String(req.body?.password || "");
+  if (!safeEqual(username, account.username) || !verifyPassword(password, account.password_hash)) {
+    return res.status(401).json({ error: "invalid_admin_credentials" });
+  }
+  res.setHeader("Set-Cookie", adminSessionCookie(account.username));
+  res.json({ admin: { username: account.username } });
+});
+
+app.post("/api/admin/setup", (req, res) => {
+  if (isAdminConfigured()) return res.status(409).json({ error: "admin_already_configured" });
+  const username = cleanText(req.body?.username);
+  const password = String(req.body?.password || "");
+  if (!username || !password) return res.status(400).json({ error: "missing_fields" });
+  db.prepare(
+    "INSERT INTO admin_credentials (id, username, password_hash) VALUES (1, ?, ?)"
+  ).run(username, hashPassword(password));
+  res.setHeader("Set-Cookie", adminSessionCookie(username));
+  res.status(201).json({ admin: { username } });
+});
+
+app.post("/api/admin/logout", requireAdmin, (_req, res) => {
+  res.setHeader("Set-Cookie", clearAdminSessionCookie());
+  res.json({ ok: true });
+});
+
+app.get("/api/admin/me", (req, res) => {
+  const admin = readAdminSession(req);
+  res.json({ admin: admin ? { username: admin.username } : null, configured: isAdminConfigured() });
+});
+
+app.get("/api/admin/overview", requireAdmin, (_req, res) => {
+  res.json({
+    stats: getAdminStats(),
+    users: getAdminUsers(),
+    invites: getAdminInvites(),
+    activity: getAdminActivity()
+  });
+});
+
+app.post("/api/admin/invites/:token/revoke", requireAdmin, (req, res) => {
+  const result = db.prepare("UPDATE event_invites SET revoked_at = CURRENT_TIMESTAMP WHERE token = ? AND revoked_at IS NULL").run(req.params.token);
+  res.json({ ok: result.changes > 0, invites: getAdminInvites(), activity: getAdminActivity() });
+});
+
+app.get("/api/admin/backup", requireAdmin, (_req, res) => {
+  if (!fs.existsSync(config.dbPath)) return res.status(404).json({ error: "backup_not_found" });
+  res.download(config.dbPath, `fairpay-backup-${new Date().toISOString().slice(0, 10)}.sqlite`);
+});
+
+app.get("/admin", (_req, res) => {
+  res.sendFile(path.join(__dirname, "..", "public", "admin.html"));
+});
+
 app.get("/invite/:token", (_req, res) => {
   res.sendFile(path.join(__dirname, "..", "public", "index.html"));
 });
@@ -397,6 +457,67 @@ function requireUser(req, res, next) {
   next();
 }
 
+function requireAdmin(req, res, next) {
+  const admin = readAdminSession(req);
+  if (!admin) return res.status(401).json({ error: "admin_auth_required" });
+  req.admin = admin;
+  next();
+}
+
+function isAdminConfigured() {
+  return Boolean(getAdminAccount());
+}
+
+function getAdminAccount() {
+  return db.prepare("SELECT * FROM admin_credentials WHERE id = 1").get();
+}
+
+function adminSessionCookie(username) {
+  const expiresAt = Date.now() + ADMIN_SESSION_HOURS * 60 * 60 * 1000;
+  const payload = Buffer.from(JSON.stringify({ username, expiresAt })).toString("base64url");
+  const signature = signAdminPayload(payload);
+  const parts = [
+    `${ADMIN_COOKIE}=${encodeURIComponent(`${payload}.${signature}`)}`,
+    "Path=/",
+    "HttpOnly",
+    "SameSite=Lax",
+    `Expires=${new Date(expiresAt).toUTCString()}`
+  ];
+  if (config.secureCookies) parts.push("Secure");
+  return parts.join("; ");
+}
+
+function clearAdminSessionCookie() {
+  return `${ADMIN_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+}
+
+function readAdminSession(req) {
+  const account = getAdminAccount();
+  if (!account) return null;
+  const token = readCookies(req.headers.cookie)[ADMIN_COOKIE];
+  if (!token || !token.includes(".")) return null;
+  const [payload, signature] = token.split(".");
+  if (!payload || !signature || !safeEqual(signature, signAdminPayload(payload))) return null;
+  try {
+    const session = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    if (session.username !== account.username || Number(session.expiresAt) < Date.now()) return null;
+    return { username: session.username };
+  } catch (_error) {
+    return null;
+  }
+}
+
+function signAdminPayload(payload) {
+  return crypto.createHmac("sha256", config.sessionSecret).update(payload).digest("base64url");
+}
+
+function safeEqual(a, b) {
+  const left = Buffer.from(String(a));
+  const right = Buffer.from(String(b));
+  if (left.length !== right.length) return false;
+  return crypto.timingSafeEqual(left, right);
+}
+
 function requireEventMember(req, res, next) {
   const event = getEventForUser(req.params.id, req.user.id);
   if (!event) return res.status(404).json({ error: "event_not_found" });
@@ -406,6 +527,93 @@ function requireEventMember(req, res, next) {
 
 function publicUser(user) {
   return { id: user.id, email: user.email, name: user.name, phone: user.phone || "", birthDate: user.birth_date || "", avatarUrl: user.avatar_url || "" };
+}
+
+function getAdminStats() {
+  const dbSize = fs.existsSync(config.dbPath) ? fs.statSync(config.dbPath).size : 0;
+  return {
+    users: db.prepare("SELECT COUNT(*) AS count FROM users").get().count,
+    activeSessions: db.prepare("SELECT COUNT(*) AS count FROM sessions WHERE expires_at > CURRENT_TIMESTAMP").get().count,
+    activeInvites: db
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM event_invites
+         WHERE revoked_at IS NULL
+           AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)`
+      )
+      .get().count,
+    expenses: db.prepare("SELECT COUNT(*) AS count FROM expenses").get().count,
+    openRestaurants: db.prepare("SELECT COUNT(*) AS count FROM restaurant_bills WHERE status = 'open'").get().count,
+    dbSize
+  };
+}
+
+function getAdminUsers() {
+  return db
+    .prepare(
+      `SELECT users.id,
+              users.name,
+              users.email,
+              users.phone,
+              users.birth_date AS birthDate,
+              users.avatar_url AS avatarUrl,
+              users.created_at AS createdAt,
+              COUNT(DISTINCT event_members.event_id) AS groupCount,
+              COUNT(DISTINCT expenses.id) AS expenseCount
+       FROM users
+       LEFT JOIN event_members ON event_members.user_id = users.id
+       LEFT JOIN expenses ON expenses.created_by = users.id
+       GROUP BY users.id
+       ORDER BY users.created_at DESC`
+    )
+    .all();
+}
+
+function getAdminInvites() {
+  return db
+    .prepare(
+      `SELECT event_invites.token,
+              event_invites.created_at AS createdAt,
+              event_invites.expires_at AS expiresAt,
+              event_invites.revoked_at AS revokedAt,
+              events.name AS eventName,
+              users.name AS createdByName,
+              users.email AS createdByEmail
+       FROM event_invites
+       JOIN events ON events.id = event_invites.event_id
+       JOIN users ON users.id = event_invites.created_by
+       WHERE event_invites.revoked_at IS NULL
+         AND (event_invites.expires_at IS NULL OR event_invites.expires_at > CURRENT_TIMESTAMP)
+       ORDER BY event_invites.created_at DESC
+       LIMIT 50`
+    )
+    .all()
+    .map((invite) => ({ ...invite, inviteUrl: `${config.appUrl}/invite/${invite.token}` }));
+}
+
+function getAdminActivity() {
+  return db
+    .prepare(
+      `SELECT 'user_registered' AS type, users.name AS title, users.email AS detail, users.created_at AS createdAt
+       FROM users
+       UNION ALL
+       SELECT 'expense_created' AS type, expenses.title AS title, users.name AS detail, expenses.created_at AS createdAt
+       FROM expenses
+       JOIN users ON users.id = expenses.created_by
+       UNION ALL
+       SELECT 'invite_created' AS type, events.name AS title, users.name AS detail, event_invites.created_at AS createdAt
+       FROM event_invites
+       JOIN events ON events.id = event_invites.event_id
+       JOIN users ON users.id = event_invites.created_by
+       UNION ALL
+       SELECT 'debt_closed' AS type, events.name AS title, users.name AS detail, settlement_payments.created_at AS createdAt
+       FROM settlement_payments
+       JOIN events ON events.id = settlement_payments.event_id
+       JOIN users ON users.id = settlement_payments.created_by
+       ORDER BY createdAt DESC
+       LIMIT 40`
+    )
+    .all();
 }
 
 function getUser(id) {

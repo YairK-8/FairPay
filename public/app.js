@@ -214,7 +214,7 @@ function renderAuth() {
                   ? `
                     ${authField("firstName", "שם פרטי", "הכנס שם פרטי", "user", "text", "given-name")}
                     ${authField("lastName", "שם משפחה", "הכנס שם משפחה", "users", "text", "family-name")}
-                    ${authField("birthDate", "תאריך לידה", "DD/MM/YYYY", "calendar", "text", "bday")}
+                    ${authField("birthDate", "תאריך לידה", "תאריך לידה", "calendar", "date", "bday")}
                     ${authField("phone", "טלפון נייד", "050-1234567", "phone", "tel", "tel")}
                   `
                   : ""
@@ -223,6 +223,7 @@ function renderAuth() {
               ${authField("password", "סיסמה", "הכנס סיסמה", "lock", "password", isRegister ? "new-password" : "current-password")}
               ${isRegister ? authField("confirmPassword", "אימות סיסמה", "הכנס שוב את הסיסמה", "lock", "password", "new-password") : ""}
               <button class="auth-submit" type="submit"><span>${isRegister ? "צור חשבון" : "כניסה"}</span>${iconSvg("arrow")}</button>
+              ${isRegister ? "" : `<a class="auth-admin-text" href="/admin">כניסה כאדמין</a>`}
             </form>
             <div class="auth-divider"><span>או</span></div>
             <div class="auth-bottom">

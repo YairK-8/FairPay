@@ -54,6 +54,12 @@ docker compose logs -f fairpay
 
 The app listens on port `3000` inside Docker Compose. Put Caddy, Nginx, Traefik, or Cloudflare Tunnel in front of it and forward traffic to `http://127.0.0.1:3000`.
 
+## Admin
+
+Open `/admin`. On the first visit, FAIRPAY will ask you to create the admin username and password. The credentials are stored in SQLite, not in `.env`.
+
+The admin area includes users, system stats, active invite links, recent activity, invite revocation, and SQLite backup download. It does not expose a separate groups management page.
+
 ### Cloudflare
 
 Use one of these options:

@@ -120,6 +120,14 @@ function migrate(db) {
       created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS admin_credentials (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      username TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
   ensureColumn(db, "restaurant_bill_items", "currency", "TEXT NOT NULL DEFAULT 'ILS'");
