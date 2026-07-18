@@ -22,6 +22,110 @@ const app = document.querySelector("#app");
 const fmt = new Intl.NumberFormat("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 let toastTimer;
 
+const motion = {
+  reduced: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+  render(options = {}) {
+    render(options);
+  },
+  async page(direction, updateView) {
+    if (this.reduced) {
+      updateView();
+      return;
+    }
+    if (!document.startViewTransition) {
+      updateView();
+      this.pageFallback(direction);
+      return;
+    }
+    document.documentElement.dataset.pageTransition = direction;
+    const transition = document.startViewTransition(updateView);
+    try {
+      await transition.finished;
+    } finally {
+      delete document.documentElement.dataset.pageTransition;
+    }
+  },
+  pageFallback(direction) {
+    const main = document.querySelector(".mobile-main");
+    if (!main) return;
+    const fromX = direction === "back" ? "-18%" : "22%";
+    main.animate(
+      [
+        { opacity: 0, transform: `translateX(${fromX}) scale(.985)`, filter: "blur(4px)" },
+        { opacity: 1, transform: "translateX(0) scale(1)", filter: "blur(0)" }
+      ],
+      {
+        duration: 430,
+        easing: "cubic-bezier(.16, 1, .3, 1)",
+        fill: "both"
+      }
+    );
+  },
+  afterRender(options = {}) {
+    if (options.cards && !this.reduced) this.cardsEnter(app);
+    if (options.drawer) this.sheetOpen();
+  },
+  cardsEnter(root) {
+    const cards = root.querySelectorAll(
+      ".profile-card, .groups-section .group-row, .event-wallet-card, .event-section, .restaurant-bill-row, .expense-mobile-row, .balance-mobile-row, .home-create-bar, .event-bottom-actions"
+    );
+    cards.forEach((card, index) => {
+      card.animate(
+        [
+          { opacity: 0, transform: "translateY(46px) scale(.965)", filter: "blur(6px)" },
+          { opacity: 1, transform: "translateY(0) scale(1)", filter: "blur(0)" }
+        ],
+        {
+          duration: 520,
+          delay: Math.min(index * 70, 420),
+          easing: "cubic-bezier(.16, 1, .3, 1)",
+          fill: "both"
+        }
+      );
+    });
+  },
+  sheetOpen() {
+    const backdrop = document.querySelector(".drawer-backdrop");
+    const sheet = document.querySelector(".expense-modal");
+    if (!sheet) return;
+    backdrop?.classList.remove("is-closing");
+    sheet.classList.remove("is-closing");
+    sheet.getBoundingClientRect();
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        backdrop?.classList.add("is-open");
+        sheet.classList.add("is-open");
+      });
+    });
+  },
+  async sheetClose() {
+    const backdrop = document.querySelector(".drawer-backdrop");
+    const sheet = document.querySelector(".expense-modal");
+    if (!sheet) return;
+    backdrop?.classList.remove("is-open");
+    sheet.classList.remove("is-open");
+    sheet.classList.add("is-closing");
+    if (!this.reduced) await waitForAnimation(sheet, 430);
+    sheet.classList.remove("is-closing");
+  },
+  async cardRemove(element, removeCallback) {
+    if (!element || this.reduced) {
+      await removeCallback();
+      return;
+    }
+    await element
+      .animate(
+        [
+          { opacity: 1, transform: "translateY(0) scale(1)", filter: "blur(0)" },
+          { opacity: 0, transform: "translateY(36px) scale(.94)", filter: "blur(5px)" }
+        ],
+        { duration: 330, easing: "cubic-bezier(.7, 0, .84, 0)", fill: "forwards" }
+      )
+      .finished.catch(() => {});
+    await removeCallback();
+  }
+};
+
 boot();
 registerServiceWorker();
 startLiveRefresh();
@@ -52,7 +156,7 @@ async function api(url, options = {}) {
   return data;
 }
 
-function render() {
+function render(options = {}) {
   if (!state.user) return renderAuth();
   app.innerHTML = `
     <div class="mobile-shell">
@@ -67,13 +171,18 @@ function render() {
     ${state.drawer ? drawerView() : ""}
   `;
   bind();
+  motion.afterRender(options);
 }
 
 function startLiveRefresh() {
   setInterval(async () => {
-    if (!state.user || !state.activeEventId || !state.eventData || state.drawer) return;
+    if (!state.user || state.drawer) return;
     try {
-      state.eventData = await api(`/api/events/${state.activeEventId}`);
+      if (state.activeEventId && state.eventData) {
+        state.eventData = await api(`/api/events/${state.activeEventId}`);
+      } else {
+        await loadEvents();
+      }
       render();
     } catch (_error) {
       // Keep the current view if a background refresh fails.
@@ -135,12 +244,13 @@ function eventsView() {
     <section class="profile-card">
       <div class="hero-watermark" aria-hidden="true">${iconSvg("sync")}</div>
       <div class="home-logo"><span>FAIR</span><span>PAY</span></div>
+      <button class="profile-quick-logout" type="button" data-action="logout" aria-label="יציאה מהמשתמש">${iconSvg("close")}</button>
       <div class="profile-top">
-        ${avatarMarkup(state.user, "large")}
-        <div>
+        <button class="profile-avatar-button" type="button" data-action="profile" aria-label="פרטים אישיים">
+          ${avatarMarkup(state.user, "large")}
+        </button>
+        <div class="profile-info">
           <h1>${escapeHtml(state.user.name)}</h1>
-          <p>${escapeHtml(state.user.email)}</p>
-          <button class="hero-profile-button" type="button" data-action="profile">${iconSvg("user")}<span>פרטים אישיים</span></button>
         </div>
       </div>
       <div class="balance-card">
@@ -187,7 +297,7 @@ function groupCard(event, index) {
       ${
         canDelete
           ? `<span class="group-delete" data-delete-event="${event.id}" title="מחיקת קבוצה" aria-label="מחיקת קבוצה">${iconSvg("trash")}</span>`
-          : `<span class="group-menu">${iconSvg("more")}</span>`
+          : ""
       }
     </button>
   `;
@@ -244,7 +354,6 @@ function eventView() {
         </div>
       </div>
       <div class="event-wallet-total">
-        <span>${iconSvg("chart")}</span>
         <div>
           <small>סה"כ הוצאות</small>
           <strong>${formatMoney(settlement.totalExpenses, event.base_currency)}</strong>
@@ -274,10 +383,10 @@ function eventView() {
       ${mobileExpensesView(expenses, members, event.base_currency)}
     </section>
     <div class="event-bottom-actions ${isOwner ? "owner-actions" : "member-actions"}">
-      <button class="event-bottom-action event-icon-action" type="button" data-action="back-events" aria-label="חזרה לבית">${iconSvg("home")}</button>
-      ${isOwner ? `<button class="event-bottom-action event-icon-action" type="button" data-action="edit-event" aria-label="עריכת קבוצה">${iconSvg("edit")}</button>` : ""}
-      ${isOwner ? `<button class="event-bottom-action event-icon-action" type="button" data-action="invite" aria-label="קישור הזמנה">${iconSvg("share")}</button>` : ""}
-      <button class="event-bottom-action event-add-expense-button" type="button" data-action="new-expense">${iconSvg("plus")}<span>הוצאה חדשה</span></button>
+      <button class="event-bottom-action event-icon-action" type="button" data-action="back-events" aria-label="חזרה לבית">${iconSvg("home")}<span>בית</span></button>
+      ${isOwner ? `<button class="event-bottom-action event-icon-action" type="button" data-action="edit-event" aria-label="עריכת קבוצה">${iconSvg("edit")}<span>עריכה</span></button>` : ""}
+      <button class="event-bottom-action event-add-expense-button" type="button" data-action="new-expense">${iconSvg("plus")}<span>הוצאה</span></button>
+      ${isOwner ? `<button class="event-bottom-action event-icon-action" type="button" data-action="invite" aria-label="קישור הזמנה">${iconSvg("share")}<span>הזמן</span></button>` : ""}
       <button class="event-bottom-action restaurant-action" type="button" data-action="new-restaurant-expense">${iconSvg("restaurant")}<span>מסעדה</span></button>
     </div>
   `;
@@ -315,7 +424,7 @@ function mobileBalancesView(balances, currency) {
     .map(
       (balance) => `
         <div class="balance-mobile-row">
-          <span class="member-dot">${initials(balance.name)}</span>
+          ${memberAvatarMarkup(balance)}
           <div>
             <strong>${escapeHtml(balance.name)}</strong>
             <small>${balance.balanceCents >= 0 ? "צריך לקבל" : "צריך לשלם"}</small>
@@ -553,7 +662,7 @@ function drawerView() {
                     <div class="participant-row">
                       <label class="participant-check">
                         <input type="checkbox" name="participant" value="${member.id}" checked />
-                        <span>${initials(member.name)}</span>
+                        ${participantAvatarMarkup(member)}
                         <b>${escapeHtml(member.name)}</b>
                       </label>
                       <label class="share-input">
@@ -655,7 +764,7 @@ function expenseDetailsDrawerView(members, baseCurrency) {
                 const member = members.find((item) => item.id === participant.userId);
                 return `
                   <div class="restaurant-order-row readonly">
-                    <span class="member-dot">${initials(member?.name)}</span>
+                    ${memberAvatarMarkup(member)}
                     <b>${escapeHtml(member?.name || "משתתף")}</b>
                     <strong>${expense.splitType === "equal" ? "חלק שווה" : formatMoney((participant.shareCents || 0) / 100, expense.currency)}</strong>
                   </div>`;
@@ -905,7 +1014,7 @@ function restaurantBillDrawerView(members, baseCurrency) {
                   const item = bill.items.find((row) => row.userId === member.id);
                   return `
                     <div class="restaurant-order-row readonly">
-                      <span class="member-dot">${initials(member.name)}</span>
+                      ${memberAvatarMarkup(member)}
                       <b>${escapeHtml(member.name)}</b>
                       <strong>${formatMoney(item?.amount || 0, item?.currency || bill.currency)}</strong>
                     </div>`;
@@ -972,23 +1081,24 @@ function bind() {
       if (action === "logout") await logout();
       if (action === "profile") {
         state.profileAvatarDraft = null;
-        state.drawer = "profile";
+        return openDrawer("profile");
       }
-      if (action === "new-event") state.drawer = "event";
+      if (action === "new-event") return openDrawer("event");
       if (action === "edit-event") {
         state.eventAvatarDraft = null;
-        state.drawer = "event-edit";
+        return openDrawer("event-edit");
       }
-      if (action === "new-expense") state.drawer = "expense";
-      if (action === "new-restaurant-expense") state.drawer = "restaurant-setup";
+      if (action === "new-expense") return openDrawer("expense");
+      if (action === "new-restaurant-expense") return openDrawer("restaurant-setup");
       if (action === "close-drawer") {
-        state.drawer = null;
-        state.profileAvatarDraft = null;
-        state.eventAvatarDraft = null;
+        return closeDrawer();
       }
       if (action === "back-events") {
-        state.eventData = null;
-        state.activeEventId = null;
+        return motion.page("back", () => {
+          state.eventData = null;
+          state.activeEventId = null;
+          render({ cards: true });
+        });
       }
       if (action === "invite") await createInvite();
       render();
@@ -1018,15 +1128,14 @@ function bind() {
   document.querySelectorAll("[data-delete-expense]").forEach((element) => {
     element.addEventListener("click", (event) => {
       event.stopPropagation();
-      deleteExpense(element.dataset.deleteExpense);
+      deleteExpense(element.dataset.deleteExpense, element.closest(".expense-mobile-row"));
     });
   });
 
   document.querySelectorAll("[data-expense-id]").forEach((element) => {
     element.addEventListener("click", () => {
       state.activeExpenseId = element.dataset.expenseId;
-      state.drawer = "expense-details";
-      render();
+      openDrawer("expense-details");
     });
   });
 
@@ -1035,16 +1144,14 @@ function bind() {
       const [fromUserId, toUserId, amount] = element.dataset.settlementFlow.split(":");
       const flow = state.eventData.settlement.flows.find((item) => String(item.fromUserId) === fromUserId && String(item.toUserId) === toUserId && String(item.amount) === amount);
       state.activeSettlementFlow = flow;
-      state.drawer = "settlement-payment";
-      render();
+      openDrawer("settlement-payment");
     });
   });
 
   document.querySelectorAll("[data-restaurant-bill-id]").forEach((element) => {
     element.addEventListener("click", () => {
       state.activeRestaurantBillId = element.dataset.restaurantBillId;
-      state.drawer = "restaurant-bill";
-      render();
+      openDrawer("restaurant-bill");
     });
   });
 
@@ -1052,7 +1159,7 @@ function bind() {
     element.addEventListener("click", async (event) => {
       event.preventDefault();
       event.stopPropagation();
-      await deleteRestaurantBill(element.dataset.deleteRestaurantBill);
+      await deleteRestaurantBill(element.dataset.deleteRestaurantBill, element.closest(".restaurant-bill-row"));
     });
   });
 }
@@ -1221,8 +1328,7 @@ async function submitProfile(event) {
       })
     });
     state.user = data.user;
-    state.profileAvatarDraft = null;
-    state.drawer = null;
+    await closeDrawerStateOnly();
     await loadEvents();
     render();
   } catch (error) {
@@ -1362,8 +1468,7 @@ async function submitEvent(event) {
     payload.avatarUrl = state.eventAvatarDraft || (isEdit ? state.eventData?.event?.avatar_url || "" : "");
     payload.emoji = "";
     const data = await api(isEdit ? `/api/events/${state.activeEventId}` : "/api/events", { method: isEdit ? "PUT" : "POST", body: JSON.stringify(payload) });
-    state.drawer = null;
-    state.eventAvatarDraft = null;
+    await closeDrawerStateOnly();
     await loadEvents();
     await openEvent(isEdit ? state.activeEventId : data.event.id);
   } catch (error) {
@@ -1379,7 +1484,7 @@ async function submitInvite(event) {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
   await createInvite(Number(form.get("expiresInHours") || 168));
-  state.drawer = null;
+  await closeDrawerStateOnly();
   render();
 }
 
@@ -1415,7 +1520,7 @@ async function submitExpense(event) {
     participants
   };
   await api(`/api/events/${state.activeEventId}/expenses`, { method: "POST", body: JSON.stringify(payload) });
-  state.drawer = null;
+  await closeDrawerStateOnly();
   await openEvent(state.activeEventId);
 }
 
@@ -1455,7 +1560,7 @@ async function submitRestaurantExpense(event) {
     participants
   };
   await api(`/api/events/${state.activeEventId}/expenses`, { method: "POST", body: JSON.stringify(payload) });
-  state.drawer = null;
+  await closeDrawerStateOnly();
   await openEvent(state.activeEventId);
 }
 
@@ -1471,8 +1576,9 @@ async function createRestaurantBill(event) {
   });
   state.eventData = data.event;
   state.activeRestaurantBillId = data.bill.id;
-  state.drawer = null;
+  await closeDrawerStateOnly();
   state.message = "נפתחה מסעדה חדשה. כל אחד יכול להיכנס אליה ולהזין כמה הזמין.";
+  render({ cards: true });
 }
 
 async function submitRestaurantItem(event) {
@@ -1486,7 +1592,7 @@ async function submitRestaurantItem(event) {
     })
   });
   state.eventData = data.event;
-  state.drawer = null;
+  await closeDrawerStateOnly();
   state.message = "החלק שלך במסעדה נשמר.";
   render();
 }
@@ -1502,7 +1608,7 @@ async function submitRestaurantPayment(event) {
     })
   });
   state.eventData = data.event;
-  state.drawer = null;
+  await closeDrawerStateOnly();
   state.activeRestaurantBillId = null;
   state.message = "המסעדה נסגרה ונוספה כהוצאה לפי הסכומים האישיים.";
   render();
@@ -1522,17 +1628,19 @@ async function submitSettlementPayment(event) {
     })
   });
   state.eventData = data.event;
-  state.drawer = null;
+  await closeDrawerStateOnly();
   state.activeSettlementFlow = null;
   state.message = "התשלוא נשמר והחוב עודכן.";
   render();
 }
 
-async function deleteRestaurantBill(id) {
-  const data = await api(`/api/events/${state.activeEventId}/restaurant-bills/${id}`, { method: "DELETE" });
-  state.eventData = data.event;
-  state.message = "המסעדה הריקה נמחקה.";
-  render();
+async function deleteRestaurantBill(id, element) {
+  await motion.cardRemove(element, async () => {
+    const data = await api(`/api/events/${state.activeEventId}/restaurant-bills/${id}`, { method: "DELETE" });
+    state.eventData = data.event;
+    state.message = "המסעדה הריקה נמחקה.";
+    render({ cards: true });
+  });
 }
 
 async function deleteEvent(id) {
@@ -1596,16 +1704,41 @@ async function loadInviteInfo() {
   }
 }
 
-async function openEvent(id) {
-  state.activeEventId = id;
-  state.eventData = await api(`/api/events/${id}`);
-  state.message = "";
+function openDrawer(drawer) {
+  state.drawer = drawer;
+  render({ drawer: true });
+}
+
+async function closeDrawer() {
+  await motion.sheetClose();
+  state.drawer = null;
+  state.profileAvatarDraft = null;
+  state.eventAvatarDraft = null;
   render();
 }
 
-async function deleteExpense(id) {
-  await api(`/api/events/${state.activeEventId}/expenses/${id}`, { method: "DELETE" });
-  await openEvent(state.activeEventId);
+async function closeDrawerStateOnly() {
+  await motion.sheetClose();
+  state.drawer = null;
+  state.profileAvatarDraft = null;
+  state.eventAvatarDraft = null;
+}
+
+async function openEvent(id) {
+  const eventData = await api(`/api/events/${id}`);
+  await motion.page("forward", () => {
+    state.activeEventId = id;
+    state.eventData = eventData;
+    state.message = "";
+    render({ cards: true });
+  });
+}
+
+async function deleteExpense(id, element) {
+  await motion.cardRemove(element, async () => {
+    await api(`/api/events/${state.activeEventId}/expenses/${id}`, { method: "DELETE" });
+    await openEvent(state.activeEventId);
+  });
 }
 
 async function createInvite() {
@@ -1650,6 +1783,20 @@ function showToast(text) {
     state.toast = "";
     render();
   }, 2200);
+}
+
+function waitForAnimation(element, fallbackMs) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      resolve();
+    };
+    element.addEventListener("transitionend", finish, { once: true });
+    element.addEventListener("animationend", finish, { once: true });
+    setTimeout(finish, fallbackMs);
+  });
 }
 
 async function joinInvite() {
@@ -1934,6 +2081,19 @@ function avatarMarkup(user, size = "large") {
   if (user?.avatarUrl) return `<span class="${className}"><img src="${escapeHtml(user.avatarUrl)}" alt="" /></span>`;
   if (size === "mini") return `<span class="${className}">${iconSvg("user")}</span>`;
   return `<span class="${className}">${initials(user?.name)}</span>`;
+}
+
+function memberAvatarMarkup(member, size = "regular") {
+  const className = size === "mini" ? "member-dot member-dot-mini" : "member-dot";
+  const name = member?.name || "משתמש";
+  if (member?.avatarUrl) return `<span class="${className}" title="${escapeHtml(name)}"><img src="${escapeHtml(member.avatarUrl)}" alt="${escapeHtml(name)}" /></span>`;
+  return `<span class="${className}" title="${escapeHtml(name)}">${escapeHtml(initials(name))}</span>`;
+}
+
+function participantAvatarMarkup(member) {
+  const name = member?.name || "משתמש";
+  if (member?.avatarUrl) return `<span title="${escapeHtml(name)}"><img src="${escapeHtml(member.avatarUrl)}" alt="${escapeHtml(name)}" /></span>`;
+  return `<span title="${escapeHtml(name)}">${escapeHtml(initials(name))}</span>`;
 }
 
 function eventVisual(event, className = "group-thumb") {

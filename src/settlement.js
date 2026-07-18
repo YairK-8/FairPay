@@ -47,6 +47,7 @@ export function calculateSettlement({ members, expenses, settlementPayments = []
   const namedBalances = members.map((member) => ({
     userId: member.id,
     name: member.name,
+    avatarUrl: member.avatarUrl || "",
     balanceCents: balances.get(member.id) || 0,
     balance: money(balances.get(member.id) || 0)
   }));
@@ -83,8 +84,10 @@ function minimizeFlows(balances) {
       flows.push({
         fromUserId: debtor.userId,
         fromName: debtor.name,
+        fromAvatarUrl: debtor.avatarUrl || "",
         toUserId: creditor.userId,
         toName: creditor.name,
+        toAvatarUrl: creditor.avatarUrl || "",
         amountCents: amount,
         amount: money(amount)
       });
