@@ -9,7 +9,7 @@ const state = {
   profileAvatarDraft: null,
   eventAvatarDraft: null,
   currencyOutsideBound: false,
-  authMode: "register",
+  authMode: "login",
   authError: "",
   drawer: null,
   inviteToken: location.pathname.startsWith("/invite/") ? location.pathname.split("/").pop() : null,
@@ -50,9 +50,9 @@ const motion = {
     if (!main) return;
     const fromX = direction === "back" ? "-18%" : "22%";
     main.animate(
-      [
-        { opacity: 0, transform: `translateX(${fromX}) scale(.985)`, filter: "blur(4px)" },
-        { opacity: 1, transform: "translateX(0) scale(1)", filter: "blur(0)" }
+        [
+          { opacity: 0, transform: `translate3d(${fromX}, 0, 0)` },
+          { opacity: 1, transform: "translate3d(0, 0, 0)" }
       ],
       {
         duration: 430,
@@ -72,12 +72,12 @@ const motion = {
     cards.forEach((card, index) => {
       card.animate(
         [
-          { opacity: 0, transform: "translateY(46px) scale(.965)", filter: "blur(6px)" },
-          { opacity: 1, transform: "translateY(0) scale(1)", filter: "blur(0)" }
+          { opacity: 0, transform: "translate3d(0, 28px, 0)" },
+          { opacity: 1, transform: "translate3d(0, 0, 0)" }
         ],
         {
-          duration: 520,
-          delay: Math.min(index * 70, 420),
+          duration: 460,
+          delay: Math.min(index * 55, 320),
           easing: "cubic-bezier(.16, 1, .3, 1)",
           fill: "both"
         }
@@ -197,14 +197,14 @@ function renderAuth() {
       <section class="auth-shell">
         <header class="auth-top">
           <strong class="fairpay-logo"><span>FAIR</span><span>PAY</span></strong>
-          <button class="help-button" type="button" aria-label="עזרה">?</button>
         </header>
         <div class="auth-layout">
           <section class="auth-card">
-            <div class="auth-hero-icon" aria-hidden="true">${iconSvg("sync")}</div>
+            <img class="auth-watermark" src="/APP-icon.png?v=154" alt="" aria-hidden="true" />
+            <div class="auth-hero-icon" aria-hidden="true"><img src="/APP-icon.png?v=154" alt="" /></div>
             <div class="auth-title">
-              <h2>${isRegister ? "צור חשבון חדש" : "כניסה לחשבון"}</h2>
-              <p>${isRegister ? "הצטרף ל-FAIRPAY והתחל לנהל הוצאות משותפות בצורה חכמה ופשוטה." : "הכנס אימייל וסיסמה כדי להמשיך ל-FAIRPAY."}</p>
+              <h2>${isRegister ? "צור חשבון חדש" : "ברוכים הבאים!"}</h2>
+              <p>${isRegister ? "הצטרפו ל-FAIRPAY והתחילו לנהל הוצאות משותפות." : "התחברו לחשבון FAIRPAY שלכם."}</p>
             </div>
             ${state.inviteToken ? `<p class="notice">קישור הצטרפות לקבוצה${state.inviteInfo?.eventName ? `: ${escapeHtml(state.inviteInfo.eventName)}` : ""}. התחבר או הירשם כדי להצטרף.</p>` : ""}
             ${state.authError ? `<p class="form-error">${escapeHtml(state.authError)}</p>` : ""}
@@ -224,9 +224,12 @@ function renderAuth() {
               ${isRegister ? authField("confirmPassword", "אימות סיסמה", "הכנס שוב את הסיסמה", "lock", "password", "new-password") : ""}
               <button class="auth-submit" type="submit"><span>${isRegister ? "צור חשבון" : "כניסה"}</span>${iconSvg("arrow")}</button>
             </form>
+            <div class="auth-divider"><span>או</span></div>
             <div class="auth-bottom">
-              <span>${isRegister ? "יש לך כבר חשבון?" : "אין לך חשבון?"}</span>
-              <button type="button" data-action="toggle-auth">${isRegister ? "התחבר" : "הרשמה"}</button>
+              <button class="auth-secondary" type="button" data-action="toggle-auth">
+                ${iconSvg(isRegister ? "arrow" : "userPlus")}
+                <span>${isRegister ? "חזרה לכניסה" : "הצטרפות חדשה"}</span>
+              </button>
             </div>
           </section>
         </div>
@@ -2134,6 +2137,7 @@ function authField(name, label, placeholder, icon, type, autocomplete) {
 function iconSvg(name) {
   const icons = {
     user: "bi-person",
+    userPlus: "bi-person-plus",
     users: "bi-people",
     calendar: "bi-calendar3",
     phone: "bi-telephone",
