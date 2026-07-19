@@ -14,6 +14,7 @@ const db = openDatabase(config.dbPath);
 const app = express();
 const ADMIN_COOKIE = "admin_sid";
 const ADMIN_SESSION_HOURS = 12;
+const liveClients = new Set();
 
 if (config.trustProxy) app.set("trust proxy", 1);
 app.use(express.json({ limit: "5mb" }));
@@ -64,6 +65,20 @@ app.get("/api/me", (req, res) => {
   res.json({ user: req.user ? publicUser(req.user) : null });
 });
 
+app.get("/api/live", requireUser, (req, res) => {
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no"
+  });
+  res.write(`retry: 5000\n\n`);
+
+  const client = { userId: req.user.id, res };
+  liveClients.add(client);
+  req.on("close", () => liveClients.delete(client));
+});
+
 app.put("/api/me", requireUser, (req, res) => {
   const name = cleanText(req.body?.name);
   const email = String(req.body?.email || "").trim().toLowerCase();
@@ -81,6 +96,7 @@ app.put("/api/me", requireUser, (req, res) => {
       avatarUrl,
       req.user.id
     );
+    broadcastLive({ type: "profile_updated", userId: req.user.id, userIds: getRelatedUserIds(req.user.id) });
     res.json({ user: publicUser(getUser(req.user.id)) });
   } catch (error) {
     if (String(error.message).includes("UNIQUE")) return res.status(409).json({ error: "email_exists" });
@@ -133,7 +149,9 @@ app.post("/api/events", requireUser, (req, res) => {
     return getEventForUser(event.lastInsertRowid, req.user.id);
   });
 
-  res.status(201).json({ event: tx() });
+  const event = tx();
+  broadcastLive({ type: "events", eventId: event.id });
+  res.status(201).json({ event });
 });
 
 app.get("/api/events/:id", requireUser, requireEventMember, (req, res) => {
@@ -153,12 +171,16 @@ app.put("/api/events/:id", requireUser, requireEventMember, (req, res) => {
      SET name = ?, base_currency = ?, spending_currency = ?, avatar_url = ?, emoji = ?
      WHERE id = ? AND owner_id = ?`
   ).run(name, baseCurrency, spendingCurrency, avatarUrl, emoji, req.event.id, req.user.id);
+  broadcastLive({ type: "event_updated", eventId: req.event.id });
   res.json({ event: getEventForUser(req.event.id, req.user.id), payload: buildEventPayload(req.event.id) });
 });
 
 app.delete("/api/events/:id", requireUser, requireEventMember, (req, res) => {
   if (Number(req.event.owner_id) !== Number(req.user.id)) return res.status(403).json({ error: "owner_required" });
+  const eventId = req.event.id;
+  const userIds = getEventMemberUserIds(eventId);
   db.prepare("DELETE FROM events WHERE id = ? AND owner_id = ?").run(req.event.id, req.user.id);
+  broadcastLive({ type: "event_deleted", eventId, userIds });
   res.json({ ok: true });
 });
 
@@ -187,6 +209,7 @@ app.delete("/api/events/:id/members/:memberId", requireUser, requireEventMember,
   if (openRestaurantAmount > 0) return res.status(409).json({ error: "member_has_open_restaurant_amount" });
 
   db.prepare("DELETE FROM event_members WHERE event_id = ? AND user_id = ?").run(req.event.id, memberId);
+  broadcastLive({ type: "event_updated", eventId: req.event.id });
   res.json({ ok: true, event: buildEventPayload(req.event.id) });
 });
 
@@ -228,12 +251,14 @@ app.post("/api/invites/:token/join", requireUser, (req, res) => {
     .get(req.params.token);
   if (!invite) return res.status(404).json({ error: "invite_not_found" });
   db.prepare("INSERT OR IGNORE INTO event_members (event_id, user_id) VALUES (?, ?)").run(invite.event_id, req.user.id);
+  broadcastLive({ type: "event_updated", eventId: invite.event_id });
   res.json({ event: getEventForUser(invite.event_id, req.user.id) });
 });
 
 app.post("/api/events/:id/expenses", requireUser, requireEventMember, async (req, res, next) => {
   try {
     const expense = await saveExpense({ eventId: req.event.id, userId: req.user.id, input: req.body });
+    broadcastLive({ type: "event_updated", eventId: req.event.id });
     res.status(201).json({ expense, settlement: buildSettlement(req.event.id) });
   } catch (error) {
     next(error);
@@ -244,7 +269,9 @@ app.put("/api/events/:id/expenses/:expenseId", requireUser, requireEventMember, 
   try {
     const existing = db.prepare("SELECT * FROM expenses WHERE id = ? AND event_id = ?").get(req.params.expenseId, req.event.id);
     if (!existing) return res.status(404).json({ error: "expense_not_found" });
+    if (Number(existing.created_by) !== Number(req.user.id)) return res.status(403).json({ error: "creator_required" });
     const expense = await saveExpense({ eventId: req.event.id, userId: req.user.id, expenseId: existing.id, input: req.body });
+    broadcastLive({ type: "event_updated", eventId: req.event.id });
     res.json({ expense, settlement: buildSettlement(req.event.id) });
   } catch (error) {
     next(error);
@@ -254,6 +281,7 @@ app.put("/api/events/:id/expenses/:expenseId", requireUser, requireEventMember, 
 app.delete("/api/events/:id/expenses/:expenseId", requireUser, requireEventMember, (req, res) => {
   const result = db.prepare("DELETE FROM expenses WHERE id = ? AND event_id = ?").run(req.params.expenseId, req.event.id);
   if (result.changes === 0) return res.status(404).json({ error: "expense_not_found" });
+  broadcastLive({ type: "event_updated", eventId: req.event.id });
   res.json({ ok: true, settlement: buildSettlement(req.event.id) });
 });
 
@@ -271,6 +299,7 @@ app.post("/api/events/:id/settlement-payments", requireUser, requireEventMember,
   db.prepare(
     "INSERT INTO settlement_payments (event_id, from_user_id, to_user_id, amount_cents, created_by) VALUES (?, ?, ?, ?, ?)"
   ).run(req.event.id, fromUserId, toUserId, amountCents, req.user.id);
+  broadcastLive({ type: "event_updated", eventId: req.event.id });
   res.status(201).json({ event: buildEventPayload(req.event.id), settlement: buildSettlement(req.event.id) });
 });
 
@@ -280,6 +309,7 @@ app.post("/api/events/:id/restaurant-bills", requireUser, requireEventMember, (r
   const billId = db
     .prepare("INSERT INTO restaurant_bills (event_id, title, currency, created_by) VALUES (?, ?, ?, ?)")
     .run(req.event.id, title, currency, req.user.id).lastInsertRowid;
+  broadcastLive({ type: "event_updated", eventId: req.event.id });
   res.status(201).json({ bill: getRestaurantBill(req.event.id, billId), event: buildEventPayload(req.event.id) });
 });
 
@@ -294,6 +324,7 @@ app.put("/api/events/:id/restaurant-bills/:billId/items/me", requireUser, requir
      ON CONFLICT(bill_id, user_id) DO UPDATE SET amount_cents = excluded.amount_cents, currency = excluded.currency, updated_at = CURRENT_TIMESTAMP`
   ).run(bill.id, req.user.id, amountCents, currency);
   db.prepare("UPDATE restaurant_bills SET updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(bill.id);
+  broadcastLive({ type: "event_updated", eventId: req.event.id });
   res.json({ bill: getRestaurantBill(req.event.id, bill.id), event: buildEventPayload(req.event.id) });
 });
 
@@ -303,6 +334,7 @@ app.delete("/api/events/:id/restaurant-bills/:billId", requireUser, requireEvent
   const total = db.prepare("SELECT COALESCE(SUM(amount_cents), 0) AS total FROM restaurant_bill_items WHERE bill_id = ?").get(bill.id).total;
   if (total > 0) return res.status(400).json({ error: "restaurant_bill_not_empty" });
   db.prepare("DELETE FROM restaurant_bills WHERE id = ?").run(bill.id);
+  broadcastLive({ type: "event_updated", eventId: req.event.id });
   res.json({ ok: true, event: buildEventPayload(req.event.id) });
 });
 
@@ -340,6 +372,7 @@ app.post("/api/events/:id/restaurant-bills/:billId/pay", requireUser, requireEve
        SET status = 'paid', paid_by = ?, expense_id = ?, currency = ?, paid_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`
     ).run(payerId, expense.id, currency, bill.id);
+    broadcastLive({ type: "event_updated", eventId: req.event.id });
     res.json({ bill: getRestaurantBill(req.event.id, bill.id), expense, event: buildEventPayload(req.event.id) });
   } catch (error) {
     next(error);
@@ -462,6 +495,43 @@ function requireAdmin(req, res, next) {
   if (!admin) return res.status(401).json({ error: "admin_auth_required" });
   req.admin = admin;
   next();
+}
+
+function broadcastLive(payload) {
+  const recipients = liveRecipients(payload);
+  const { userIds: _userIds, ...publicPayload } = payload;
+  const message = `data: ${JSON.stringify({ ...publicPayload, at: Date.now() })}\n\n`;
+  for (const client of liveClients) {
+    if (recipients && !recipients.has(Number(client.userId))) continue;
+    try {
+      client.res.write(message);
+    } catch (_error) {
+      liveClients.delete(client);
+    }
+  }
+}
+
+function liveRecipients(payload) {
+  if (Array.isArray(payload.userIds)) return new Set(payload.userIds.map(Number));
+  if (payload.eventId) return new Set(getEventMemberUserIds(payload.eventId));
+  if (payload.userId) return new Set([Number(payload.userId)]);
+  return null;
+}
+
+function getEventMemberUserIds(eventId) {
+  return db.prepare("SELECT user_id FROM event_members WHERE event_id = ?").all(eventId).map((row) => Number(row.user_id));
+}
+
+function getRelatedUserIds(userId) {
+  return db
+    .prepare(
+      `SELECT DISTINCT related.user_id
+       FROM event_members mine
+       JOIN event_members related ON related.event_id = mine.event_id
+       WHERE mine.user_id = ?`
+    )
+    .all(userId)
+    .map((row) => Number(row.user_id));
 }
 
 function isAdminConfigured() {

@@ -8,6 +8,8 @@ const state = {
   activeSettlementFlow: null,
   profileAvatarDraft: null,
   eventAvatarDraft: null,
+  expenseScope: "all",
+  expenseCategory: "all",
   currencyOutsideBound: false,
   authMode: "login",
   authError: "",
@@ -21,6 +23,8 @@ const state = {
 const app = document.querySelector("#app");
 const fmt = new Intl.NumberFormat("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 let toastTimer;
+let liveRefreshBusy = false;
+let liveSource = null;
 
 const motion = {
   reduced: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
@@ -70,10 +74,14 @@ const motion = {
       ".profile-card, .groups-section .group-row, .event-wallet-card, .event-section, .restaurant-bill-row, .expense-mobile-row, .balance-mobile-row, .home-create-bar, .event-bottom-actions"
     );
     cards.forEach((card, index) => {
-      card.animate(
+      const baseTransform = getComputedStyle(card).transform;
+      const hasBaseTransform = baseTransform && baseTransform !== "none";
+      const fromTransform = hasBaseTransform ? `${baseTransform} translate3d(0, 28px, 0)` : "translate3d(0, 28px, 0)";
+      const toTransform = hasBaseTransform ? baseTransform : "translate3d(0, 0, 0)";
+      const animation = card.animate(
         [
-          { opacity: 0, transform: "translate3d(0, 28px, 0)" },
-          { opacity: 1, transform: "translate3d(0, 0, 0)" }
+          { opacity: 0, transform: fromTransform },
+          { opacity: 1, transform: toTransform }
         ],
         {
           duration: 460,
@@ -82,6 +90,13 @@ const motion = {
           fill: "both"
         }
       );
+      animation.finished
+        .then(() => {
+          card.style.opacity = "";
+          card.style.transform = "";
+          animation.cancel();
+        })
+        .catch(() => {});
     });
   },
   sheetOpen() {
@@ -128,7 +143,7 @@ const motion = {
 
 boot();
 registerServiceWorker();
-startLiveRefresh();
+startLiveUpdates();
 
 async function boot() {
   try {
@@ -137,6 +152,7 @@ async function boot() {
     state.user = me.user;
     if (state.user) {
       await loadEvents();
+      startLiveUpdates();
       if (state.inviteToken) await joinInvite();
     }
   } catch (error) {
@@ -158,6 +174,7 @@ async function api(url, options = {}) {
 
 function render(options = {}) {
   if (!state.user) return renderAuth();
+  const scrollY = options.preserveScroll ? window.scrollY : null;
   app.innerHTML = `
     <div class="mobile-shell">
       <main class="mobile-main ${state.eventData ? "event-main" : "home-main"}">${state.eventData ? eventView() : eventsView()}</main>
@@ -172,22 +189,63 @@ function render(options = {}) {
   `;
   bind();
   motion.afterRender(options);
+  if (scrollY !== null) requestAnimationFrame(() => window.scrollTo(0, scrollY));
 }
 
-function startLiveRefresh() {
-  setInterval(async () => {
-    if (!state.user || state.drawer) return;
+function startLiveUpdates() {
+  if (!state.user || liveSource || !window.EventSource) return;
+  liveSource = new EventSource("/api/live");
+  liveSource.onmessage = async (event) => {
+    if (!state.user || state.drawer || document.hidden || liveRefreshBusy) return;
+    const update = parseLiveUpdate(event.data);
+    if (!shouldApplyLiveUpdate(update)) return;
+    liveRefreshBusy = true;
     try {
+      if (update.type === "event_deleted" && String(update.eventId) === String(state.activeEventId)) {
+        state.activeEventId = null;
+        state.eventData = null;
+        state.activeExpenseId = null;
+        state.activeRestaurantBillId = null;
+        state.activeSettlementFlow = null;
+        await loadEvents();
+        render({ cards: true });
+        return;
+      }
       if (state.activeEventId && state.eventData) {
         state.eventData = await api(`/api/events/${state.activeEventId}`);
       } else {
         await loadEvents();
       }
-      render();
+      render({ preserveScroll: true });
     } catch (_error) {
-      // Keep the current view if a background refresh fails.
+      // Keep the current view if a live refresh fails.
+    } finally {
+      liveRefreshBusy = false;
     }
-  }, 4000);
+  };
+  liveSource.onerror = () => {
+    if (!state.user) stopLiveUpdates();
+  };
+}
+
+function stopLiveUpdates() {
+  liveSource?.close();
+  liveSource = null;
+}
+
+function parseLiveUpdate(data) {
+  try {
+    return JSON.parse(data || "{}");
+  } catch (_error) {
+    return {};
+  }
+}
+
+function shouldApplyLiveUpdate(update) {
+  if (!update?.type) return false;
+  if (!state.activeEventId) return true;
+  if (!update.eventId) return true;
+  return String(update.eventId) === String(state.activeEventId);
 }
 
 function renderAuth() {
@@ -246,7 +304,7 @@ function eventsView() {
   const iOwe = Math.abs(state.events.filter((event) => event.userBalance < 0).reduce((sum, event) => sum + Number(event.userBalance || 0), 0));
   return `
     <section class="profile-card">
-      <div class="hero-watermark" aria-hidden="true">${iconSvg("sync")}</div>
+      <img class="hero-watermark" src="/exchange-watermark.png?v=1" alt="" aria-hidden="true" />
       <div class="home-logo"><span>FAIR</span><span>PAY</span></div>
       <button class="profile-quick-logout" type="button" data-action="logout" aria-label="יציאה מהמשתמש">${iconSvg("close")}</button>
       <div class="profile-top">
@@ -328,6 +386,11 @@ function groupMembersPreview(event) {
 function eventView() {
   const { event, members, expenses, settlement } = state.eventData;
   const isOwner = Number(event.owner_id) === Number(state.user.id);
+  const scopedExpenses = filterExpensesForScope(expenses);
+  const filteredExpenses = filterExpensesForCategory(scopedExpenses);
+  const expenseScopeLabel = state.expenseScope === "mine" ? "ההוצאות שלי" : "כל ההוצאות";
+  const expensesSummaryTotal = expensesVisibleTotal(filteredExpenses);
+  const myTotalExpenses = myExpenseSharesTotal(expenses);
   const myBalance = settlement.balances.find((balance) => balance.userId === state.user.id);
   const myAmount = Number(myBalance?.balance || 0);
   const owedToMe = Math.max(myAmount, 0);
@@ -362,10 +425,14 @@ function eventView() {
           <small>סה"כ הוצאות</small>
           <strong>${formatMoney(settlement.totalExpenses, event.base_currency)}</strong>
         </div>
+        <div>
+          <small>סה"כ ההוצאות שלי</small>
+          <strong>${formatMoney(myTotalExpenses, event.base_currency)}</strong>
+        </div>
       </div>
     </section>
     ${openRestaurantBillsView(state.eventData.restaurantBills || [], members)}
-    <section class="event-section">
+    <section class="event-section settlement-section">
       <div class="event-section-title">
         <h2>מי חייב למי</h2>
         <span>${settlement.flows.length} העברות</span>
@@ -379,21 +446,106 @@ function eventView() {
       </div>
       ${mobileBalancesView(settlement.balances, event.base_currency)}
     </section>
-    <section class="event-section">
+    <section class="event-section expenses-section">
       <div class="event-section-title">
         <h2>הוצאות</h2>
-        <span>${expenses.length} פריטים</span>
+        <span>${filteredExpenses.length}${state.expenseScope === "mine" || state.expenseCategory !== "all" ? ` מתוך ${expenses.length}` : ""} פריטים</span>
       </div>
-      ${mobileExpensesView(expenses, members, event.base_currency)}
+      <div class="expense-scope-switch" role="group" aria-label="סינון הוצאות">
+        <button class="${state.expenseScope === "mine" ? "active" : ""}" type="button" data-expense-scope="mine">ההוצאות שלי</button>
+        <button class="${state.expenseScope === "all" ? "active" : ""}" type="button" data-expense-scope="all">כל ההוצאות</button>
+      </div>
+      ${expenseCategoryFilterView(scopedExpenses)}
+      <div class="expense-list-summary">
+        <span>סכום מוצג</span>
+        <strong>${formatMoney(expensesSummaryTotal, event.base_currency)}</strong>
+      </div>
+      ${mobileExpensesView(filteredExpenses, members, event.base_currency, expenseScopeLabel)}
     </section>
     <div class="event-bottom-actions ${isOwner ? "owner-actions" : "member-actions"}">
-      <button class="event-bottom-action event-icon-action" type="button" data-action="back-events" aria-label="חזרה לבית">${iconSvg("home")}<span>בית</span></button>
       ${isOwner ? `<button class="event-bottom-action event-icon-action" type="button" data-action="edit-event" aria-label="עריכת קבוצה">${iconSvg("edit")}<span>עריכה</span></button>` : ""}
-      <button class="event-bottom-action event-add-expense-button" type="button" data-action="new-expense">${iconSvg("plus")}<span>הוצאה</span></button>
       ${isOwner ? `<button class="event-bottom-action event-icon-action" type="button" data-action="invite" aria-label="קישור הזמנה">${iconSvg("share")}<span>הזמן</span></button>` : ""}
+      <button class="event-bottom-action event-add-expense-button" type="button" data-action="new-expense">${iconSvg("plus")}<span>הוצאה</span></button>
       <button class="event-bottom-action restaurant-action" type="button" data-action="new-restaurant-expense">${iconSvg("restaurant")}<span>מסעדה</span></button>
+      <button class="event-bottom-action event-icon-action" type="button" data-action="back-events" aria-label="חזרה לבית">${iconSvg("home")}<span>בית</span></button>
     </div>
   `;
+}
+
+function filterExpensesForScope(expenses) {
+  if (state.expenseScope !== "mine") return expenses;
+  const userId = Number(state.user?.id);
+  return expenses.filter((expense) => expenseParticipantShareBaseCents(expense, userId) > 0);
+}
+
+function filterExpensesForCategory(expenses) {
+  if (!state.expenseCategory || state.expenseCategory === "all") return expenses;
+  return expenses.filter((expense) => (expense.category || "other") === state.expenseCategory);
+}
+
+function expensesVisibleTotal(expenses) {
+  if (state.expenseScope === "mine") return myExpenseSharesTotal(expenses);
+  return expenses.reduce((sum, expense) => sum + (Number(expense.amountCents || 0) * Number(expense.exchangeRate || 1)) / 100, 0);
+}
+
+function expenseCategoryFilterView(expenses) {
+  const options = [{ value: "all", label: "הכול", icon: iconSvg("more") }, ...categoryOptions()];
+  return `
+    <div class="expense-category-filter" role="group" aria-label="סינון לפי קטגוריה">
+      ${options
+        .map((option) => {
+          const count = option.value === "all" ? expenses.length : expenses.filter((expense) => (expense.category || "other") === option.value).length;
+          return `
+            <button class="${state.expenseCategory === option.value ? "active" : ""}" type="button" data-expense-category="${escapeHtml(option.value)}">
+              ${option.icon}
+              <span>${escapeHtml(option.label)}</span>
+              <small>${count}</small>
+            </button>`;
+        })
+        .join("")}
+    </div>`;
+}
+
+function myExpenseSharesTotal(expenses) {
+  const userId = Number(state.user?.id);
+  const totalCents = expenses.reduce((sum, expense) => sum + expenseParticipantShareBaseCents(expense, userId), 0);
+  return totalCents / 100;
+}
+
+function expenseParticipantShareBaseCents(expense, userId) {
+  const participants = expense.participants || [];
+  const participantIndex = participants.findIndex((item) => Number(item.userId) === Number(userId));
+  if (participantIndex < 0) return 0;
+
+  const convertedTotal = Math.round(Number(expense.amountCents || 0) * Number(expense.exchangeRate || 1));
+  if (expense.splitType === "equal") {
+    const base = Math.floor(convertedTotal / participants.length);
+    const remainder = convertedTotal % participants.length;
+    return base + (participantIndex < remainder ? 1 : 0);
+  }
+
+  const participantTotal = participants.reduce((sum, participant) => sum + Number(participant.shareCents || 0), 0);
+  if (participantTotal <= 0) return 0;
+  const shares = participants.map((participant) => Math.round(convertedTotal * (Number(participant.shareCents || 0) / participantTotal)));
+  const drift = convertedTotal - shares.reduce((sum, share) => sum + share, 0);
+  if (shares.length > 0) shares[0] += drift;
+  return shares[participantIndex] || 0;
+}
+
+function isExpenseParticipant(expense, userId) {
+  if (!expense) return true;
+  return (expense.participants || []).some((participant) => Number(participant.userId) === Number(userId));
+}
+
+function expenseParticipantOriginalShare(expense, userId) {
+  if (!expense || expense.splitType !== "unequal") return "0";
+  const participant = (expense.participants || []).find((item) => Number(item.userId) === Number(userId));
+  return participant ? fmt.format(Number(participant.shareCents || 0) / 100).replace(/,/g, "") : "0";
+}
+
+function expenseRateLabel(expense, baseCurrency) {
+  if (!expense) return `1 ${baseCurrency} = 1 ${baseCurrency}`;
+  return `1 ${expense.currency} = ${Number(expense.exchangeRate || 1).toFixed(4)} ${baseCurrency}`;
 }
 
 function mobileFlowsView(flows, currency) {
@@ -404,18 +556,17 @@ function mobileFlowsView(flows, currency) {
         const canClose = Number(flow.toUserId) === Number(state.user?.id);
         return `
         <button class="settlement-mobile-row${canClose ? "" : " settlement-mobile-row-readonly"}" type="button" ${canClose ? `data-settlement-flow="${escapeHtml(`${flow.fromUserId}:${flow.toUserId}:${flow.amount}`)}"` : "disabled"}>
-          <div class="settlement-person settlement-to">
+          <div class="settlement-person settlement-to" dir="rtl">
             <small>מקבל</small>
             <strong>${escapeHtml(flow.toName)}</strong>
           </div>
-          <div class="settlement-arrow-box" aria-hidden="true">${iconSvg("settlementArrow")}</div>
-          <div class="settlement-person settlement-from">
+          <div class="settlement-transfer-center">
+            <b>${formatMoney(flow.amount, currency)}</b>
+            <span class="settlement-arrow-box" aria-hidden="true">${iconSvg("settlementArrow")}</span>
+          </div>
+          <div class="settlement-person settlement-from" dir="ltr">
             <small>משלם</small>
             <strong>${escapeHtml(flow.fromName)}</strong>
-          </div>
-          <div class="settlement-amount">
-            <small>${canClose ? "סכום להעברה" : "רק המקבל יכול לסגור"}</small>
-            <b>${formatMoney(flow.amount, currency)}</b>
           </div>
         </button>`;
       }
@@ -476,12 +627,17 @@ function openRestaurantBillsView(bills, members) {
     </section>`;
 }
 
-function mobileExpensesView(expenses, members, baseCurrency) {
-  if (!expenses.length) return `<div class="home-empty"><strong>אין עדיין הוצאות</strong><span>הוסף הוצאה ראשונה כדי לראות את החישוב מתעדכן.</span></div>`;
+function mobileExpensesView(expenses, members, baseCurrency, scopeLabel = "כל ההוצאות") {
+  if (!expenses.length) {
+    const isMine = scopeLabel === "ההוצאות שלי";
+    return `<div class="home-empty"><strong>${isMine ? "אין הוצאות שלי" : "אין עדיין הוצאות"}</strong><span>${isMine ? "אין כרגע הוצאות שאתה משתתף בהן." : "הוסף הוצאה ראשונה כדי לראות את החישוב מתעדכן."}</span></div>`;
+  }
   return `<div class="expense-mobile-list">${expenses
     .map((expense) => {
       const payer = members.find((member) => member.id === expense.payers[0]?.userId);
       const converted = (expense.amountCents * expense.exchangeRate) / 100;
+      const myShare = expenseParticipantShareBaseCents(expense, state.user?.id) / 100;
+      const displayAmount = state.expenseScope === "mine" ? myShare : converted;
       const category = categoryMeta(expense.category);
       return `
         <div class="expense-mobile-row" data-expense-id="${expense.id}">
@@ -491,10 +647,8 @@ function mobileExpensesView(expenses, members, baseCurrency) {
             <small>${escapeHtml(category.label)} · ${escapeHtml(payer?.name || "כמה משלמים")} · ${escapeHtml(expense.expenseDate)}</small>
           </div>
           <div class="expense-amount">
-            <b>${formatMoney(converted, baseCurrency)}</b>
-            <small>${expense.currency === baseCurrency ? "" : `${fmt.format(expense.amount)} ${escapeHtml(expense.currency)}`}</small>
+            <b>${formatMoney(displayAmount, baseCurrency)}</b>
           </div>
-          <button class="expense-delete" type="button" data-delete-expense="${expense.id}" aria-label="מחיקת הוצאה">${iconSvg("trash")}</button>
         </div>`;
     })
     .join("")}</div>`;
@@ -578,21 +732,24 @@ function drawerView() {
   if (state.drawer === "restaurant-bill") return restaurantBillDrawerView(members, baseCurrency);
   if (state.drawer === "expense-details") return expenseDetailsDrawerView(members, baseCurrency);
   if (state.drawer === "settlement-payment") return settlementPaymentDrawerView(baseCurrency);
+  const editingExpense = state.drawer === "expense-edit" ? (state.eventData?.expenses || []).find((item) => String(item.id) === String(state.activeExpenseId)) : null;
+  const isExpenseEdit = Boolean(editingExpense);
+  const editingPayerId = editingExpense?.payers?.[0]?.userId;
   return `
     <div class="drawer-backdrop modal-backdrop">
       <aside class="expense-modal">
         <div class="expense-modal-handle"></div>
-        <div class="expense-modal-header">
+        <div class="expense-modal-header expense-details-header">
           <div>
-            <span>הוצאה חדשה</span>
-            <h2>מה שילמת?</h2>
+            <span>${isExpenseEdit ? "עריכת הוצאה" : "הוצאה חדשה"}</span>
+            <h2>${isExpenseEdit ? "מה לשנות?" : "מה שילמת?"}</h2>
           </div>
           <button class="round-action" type="button" data-action="close-drawer" aria-label="סגירה">${iconSvg("close")}</button>
         </div>
-        <form class="expense-form" data-form="expense" data-base-currency="${escapeHtml(baseCurrency)}">
+        <form class="expense-form" data-form="expense" data-base-currency="${escapeHtml(baseCurrency)}" data-mode="${isExpenseEdit ? "edit" : "create"}" data-expense-id="${escapeHtml(editingExpense?.id || "")}">
           <label class="expense-input wide">
             <span>שם ההוצאה</span>
-            <input name="title" required placeholder="מונית לשדה, ארוחת ערב, מלון..." />
+            <input name="title" required placeholder="מונית לשדה, ארוחת ערב, מלון..." value="${escapeHtml(editingExpense?.title || "")}" />
           </label>
           <section class="expense-card">
             <div class="expense-card-title">
@@ -604,7 +761,7 @@ function drawerView() {
                 .map(
                   (category, index) => `
                     <label class="category-chip">
-                      <input type="radio" name="category" value="${category.value}" ${index === 0 ? "checked" : ""} />
+                      <input type="radio" name="category" value="${category.value}" ${editingExpense ? (category.value === editingExpense.category ? "checked" : "") : index === 0 ? "checked" : ""} />
                       <span>${category.icon}</span>
                       <b>${category.label}</b>
                     </label>`
@@ -615,11 +772,11 @@ function drawerView() {
           <div class="expense-two">
             <label class="expense-input">
               <span>תאריך</span>
-              <input name="expenseDate" type="date" value="${new Date().toISOString().slice(0, 10)}" required />
+              <input name="expenseDate" type="date" value="${escapeHtml(editingExpense?.expenseDate || new Date().toISOString().slice(0, 10))}" required />
             </label>
             <label class="expense-input">
               <span>שולם על ידי</span>
-              <select name="payer">${members.map((member) => `<option value="${member.id}" ${member.id === state.user.id ? "selected" : ""}>${escapeHtml(member.name)}</option>`).join("")}</select>
+              <select name="payer">${members.map((member) => `<option value="${member.id}" ${Number(member.id) === Number(editingPayerId || state.user.id) ? "selected" : ""}>${escapeHtml(member.name)}</option>`).join("")}</select>
             </label>
           </div>
           <section class="expense-card">
@@ -630,24 +787,24 @@ function drawerView() {
             <div class="amount-currency-row">
               <label class="expense-input">
                 <span>סכום ששולם</span>
-                <input name="amount" type="number" inputmode="decimal" step="0.01" min="0.01" required placeholder="0.00" />
+                <input name="amount" type="number" inputmode="decimal" step="0.01" min="0.01" required placeholder="0.00" value="${escapeHtml(editingExpense?.amount || "")}" />
               </label>
               <label class="expense-input">
                 <span>מטבע</span>
-                ${currencySearchInput("currency", spendingCurrency)}
+                ${currencySearchInput("currency", editingExpense?.currency || spendingCurrency)}
               </label>
             </div>
             <div class="rate-panel">
               <div>
                 <span>המרה אוטומטית</span>
-                <strong data-rate-label>1 ${escapeHtml(baseCurrency)} = 1 ${escapeHtml(baseCurrency)}</strong>
+                <strong data-rate-label>${expenseRateLabel(editingExpense, baseCurrency)}</strong>
               </div>
               <button type="button" data-rate-refresh>${iconSvg("sync")}<span>עדכן</span></button>
-              <input name="exchangeRate" type="hidden" value="1" required />
+              <input name="exchangeRate" type="hidden" value="${escapeHtml(editingExpense?.exchangeRate || 1)}" required />
             </div>
             <div class="converted-panel">
               <span>סכום במטבע הקבוצה</span>
-              <strong data-converted>${formatMoney(0, baseCurrency)}</strong>
+              <strong data-converted>${formatMoney(editingExpense ? (editingExpense.amountCents * editingExpense.exchangeRate) / 100 : 0, baseCurrency)}</strong>
             </div>
           </section>
           <section class="expense-card">
@@ -655,9 +812,12 @@ function drawerView() {
               <h3>משתתפים וחלוקה</h3>
               <small>כולא מסומנים אוטומטית</small>
             </div>
+            <div class="participant-quick-actions">
+              <button type="button" data-expense-only-me>${iconSvg("user")}<span>רק אני</span></button>
+            </div>
             <div class="split-switch" role="radiogroup" aria-label="סוג חלוקה">
-              <label><input type="radio" name="splitType" value="equal" checked /><span>חלוקה שווה</span></label>
-              <label><input type="radio" name="splitType" value="unequal" /><span>לא שווה</span></label>
+              <label><input type="radio" name="splitType" value="equal" ${editingExpense?.splitType === "unequal" ? "" : "checked"} /><span>חלוקה שווה</span></label>
+              <label><input type="radio" name="splitType" value="unequal" ${editingExpense?.splitType === "unequal" ? "checked" : ""} /><span>לא שווה</span></label>
             </div>
             <div class="participants-list">
               ${members
@@ -665,20 +825,20 @@ function drawerView() {
                   (member) => `
                     <div class="participant-row">
                       <label class="participant-check">
-                        <input type="checkbox" name="participant" value="${member.id}" checked />
+                        <input type="checkbox" name="participant" value="${member.id}" ${isExpenseParticipant(editingExpense, member.id) ? "checked" : ""} />
                         ${participantAvatarMarkup(member)}
                         <b>${escapeHtml(member.name)}</b>
                       </label>
                       <label class="share-input">
                         <small>חלק</small>
-                        <input name="share-${member.id}" type="number" step="0.01" min="0" value="0" disabled />
+                        <input name="share-${member.id}" type="number" step="0.01" min="0" value="${escapeHtml(expenseParticipantOriginalShare(editingExpense, member.id))}" disabled />
                       </label>
                     </div>`
                 )
                 .join("")}
             </div>
           </section>
-          <button class="expense-save" type="submit">${iconSvg("check")}<span>שמור הוצאה</span></button>
+          <button class="expense-save" type="submit">${iconSvg("check")}<span>${isExpenseEdit ? "שמור שינויים" : "שמור הוצאה"}</span></button>
         </form>
       </aside>
     </div>`;
@@ -739,44 +899,69 @@ function profileDrawerView() {
 function expenseDetailsDrawerView(members, baseCurrency) {
   const expense = (state.eventData?.expenses || []).find((item) => String(item.id) === String(state.activeExpenseId));
   if (!expense) return "";
+  const canEdit = Number(expense.createdBy) === Number(state.user?.id);
   const payerNames = expense.payers.map((payer) => members.find((member) => member.id === payer.userId)?.name || "משלם").join(", ");
   const category = categoryMeta(expense.category);
   const converted = (expense.amountCents * expense.exchangeRate) / 100;
   return `
     <div class="drawer-backdrop modal-backdrop">
-      <aside class="expense-modal">
+      <aside class="expense-modal expense-details-modal">
         <div class="expense-modal-handle"></div>
-        <div class="expense-modal-header">
-          <div>
-            <span>${escapeHtml(category.label)}</span>
+        <div class="expense-details-hero">
+          ${canEdit ? `<button class="round-action expense-edit-round" type="button" data-edit-expense="${expense.id}" aria-label="עריכת הוצאה">${iconSvg("edit")}</button>` : ""}
+          <div class="expense-details-icon expense-icon-${escapeHtml(category.value)}">${category.icon}</div>
+          <button class="round-action" type="button" data-action="close-drawer" aria-label="סגירה">${iconSvg("close")}</button>
+          <div class="expense-details-title">
+            <span>פרטי הוצאה</span>
             <h2>${escapeHtml(expense.title)}</h2>
           </div>
-          <button class="round-action" type="button" data-action="close-drawer" aria-label="סגירה">${iconSvg("close")}</button>
         </div>
-        <section class="expense-card details-card">
-          <div class="detail-row"><span>שולם על ידי</span><strong>${escapeHtml(payerNames)}</strong></div>
-          <div class="detail-row"><span>סכום מקורי</span><strong>${formatMoney(expense.amount, expense.currency)}</strong></div>
-          <div class="detail-row"><span>במטבע הקבוצה</span><strong>${formatMoney(converted, baseCurrency)}</strong></div>
-          <div class="detail-row"><span>תאריך</span><strong>${escapeHtml(expense.expenseDate)}</strong></div>
-          <div class="detail-row"><span>חלוקה</span><strong>${expense.splitType === "equal" ? "שווה" : "לא שווה"}</strong></div>
+        <section class="expense-card details-card expense-details-card">
+          ${expenseDetailRow("user", "שולם על ידי", payerNames)}
+          ${expenseDetailRow("money", "סכום מקורי", formatMoney(expense.amount, expense.currency))}
+          ${expenseDetailRow("coins", "במטבע הקבוצה", formatMoney(converted, baseCurrency), "green")}
+          ${expenseDetailRow("calendar", "תאריך", expense.expenseDate)}
+          ${expenseDetailRow("pie", "חלוקה", expense.splitType === "equal" ? "שווה" : "לא שווה")}
+          <button class="expense-details-delete" type="button" data-delete-expense="${expense.id}">${iconSvg("trash")}<span>מחיקת הוצאה</span></button>
         </section>
-        <section class="expense-card">
-          <div class="expense-card-title"><h3>משתתפים</h3><small>${expense.participants.length} אנשים</small></div>
-          <div class="restaurant-orders">
+        <section class="expense-card expense-participants-card">
+          <div class="expense-details-section-title">
+            <h3>משתתפים</h3>
+            <span>${iconSvg("users")} ${expense.participants.length} משתתפים</span>
+          </div>
+          <div class="expense-details-participants">
             ${expense.participants
               .map((participant) => {
                 const member = members.find((item) => item.id === participant.userId);
-                return `
-                  <div class="restaurant-order-row readonly">
-                    ${memberAvatarMarkup(member)}
-                    <b>${escapeHtml(member?.name || "משתתף")}</b>
-                    <strong>${expense.splitType === "equal" ? "חלק שווה" : formatMoney((participant.shareCents || 0) / 100, expense.currency)}</strong>
-                  </div>`;
+                return expenseParticipantDetailRow(expense, participant, member, baseCurrency);
               })
               .join("")}
           </div>
         </section>
       </aside>
+    </div>`;
+}
+
+function expenseDetailRow(icon, label, value, tone = "") {
+  return `
+    <div class="expense-detail-row ${tone ? `is-${tone}` : ""}">
+      <span class="expense-detail-icon">${iconSvg(icon)}</span>
+      <b>${escapeHtml(label)}</b>
+      <strong>${escapeHtml(value)}</strong>
+    </div>`;
+}
+
+function expenseParticipantDetailRow(expense, participant, member, baseCurrency) {
+  const share = expenseParticipantShareBaseCents(expense, participant.userId) / 100;
+  const splitLabel = expense.splitType === "equal" ? "חלק שווה" : "חלק מותאם";
+  return `
+    <div class="expense-participant-detail-row">
+      ${memberAvatarMarkup(member)}
+      <div>
+        <b>${escapeHtml(member?.name || "משתתף")}</b>
+        <span>${splitLabel}</span>
+      </div>
+      <strong>${formatMoney(share, baseCurrency)}</strong>
     </div>`;
 }
 
@@ -1121,6 +1306,30 @@ function bind() {
     });
   });
 
+  document.querySelectorAll("[data-edit-expense]").forEach((element) => {
+    element.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      state.activeExpenseId = element.dataset.editExpense;
+      await closeDrawerStateOnly();
+      openDrawer("expense-edit");
+    });
+  });
+
+  document.querySelectorAll("[data-expense-scope]").forEach((element) => {
+    element.addEventListener("click", () => {
+      state.expenseScope = element.dataset.expenseScope === "mine" ? "mine" : "all";
+      render({ preserveScroll: true });
+    });
+  });
+
+  document.querySelectorAll("[data-expense-category]").forEach((element) => {
+    element.addEventListener("click", () => {
+      state.expenseCategory = element.dataset.expenseCategory || "all";
+      render({ preserveScroll: true });
+    });
+  });
+
   document.querySelectorAll("[data-remove-member]").forEach((element) => {
     element.addEventListener("click", async (event) => {
       event.preventDefault();
@@ -1136,7 +1345,7 @@ function bind() {
     });
   });
 
-  document.querySelectorAll("[data-expense-id]").forEach((element) => {
+  document.querySelectorAll(".expense-mobile-row[data-expense-id]").forEach((element) => {
     element.addEventListener("click", () => {
       state.activeExpenseId = element.dataset.expenseId;
       openDrawer("expense-details");
@@ -1183,6 +1392,11 @@ function bindExpenseForm(form) {
     refresh();
   }));
   form.querySelectorAll('.share-input input').forEach((input) => input.addEventListener("input", refresh));
+  form.querySelector("[data-expense-only-me]")?.addEventListener("click", () => {
+    markExpenseOnlyMe(form);
+    distributeUnequalShares(form);
+    refresh();
+  });
   form.querySelector('[name="currency"]')?.addEventListener("change", async () => {
     await refreshExchangeRate(form);
     refresh();
@@ -1191,7 +1405,12 @@ function bindExpenseForm(form) {
     await refreshExchangeRate(form);
     refresh();
   });
-  refreshExchangeRate(form).finally(refresh);
+  if (form.dataset.mode === "edit") {
+    form.dataset.rateReady = "true";
+    refresh();
+  } else {
+    refreshExchangeRate(form).finally(refresh);
+  }
 }
 
 function bindRestaurantForm(form) {
@@ -1261,6 +1480,19 @@ function updateExpenseForm(form) {
   });
 }
 
+function markExpenseOnlyMe(form) {
+  const userId = String(state.user?.id || "");
+  form.querySelectorAll('[name="participant"]').forEach((input) => {
+    input.checked = String(input.value) === userId;
+  });
+  form.querySelectorAll(".participant-row").forEach((row) => {
+    if (!row.querySelector('[name="participant"]')?.checked) {
+      const input = row.querySelector(".share-input input");
+      if (input) input.value = "0";
+    }
+  });
+}
+
 function updateRestaurantForm(form) {
   const total = [...form.querySelectorAll('.restaurant-order-row input')].reduce((sum, input) => sum + Number(input.value || 0), 0);
   const amountInput = form.querySelector('[name="amount"]');
@@ -1309,6 +1541,7 @@ async function submitAuth(event) {
     const data = await api(endpoint, { method: "POST", body: JSON.stringify(payload) });
     state.user = data.user;
     await loadEvents();
+    startLiveUpdates();
     if (state.inviteToken) await joinInvite();
     render();
   } catch (error) {
@@ -1476,9 +1709,11 @@ async function submitEvent(event) {
     await loadEvents();
     await openEvent(isEdit ? state.activeEventId : data.event.id);
   } catch (error) {
-    state.message = isEdit
-      ? "לא הצלחנו לשמור את השינויים. אם השרת כבר פתוח, צריך להפעיל אותו מחדש כדי לטעון את עדכון עריכת הקבוצה."
-      : "לא הצלחנו ליצור את הקבוצה. נסה שוב בעוד רגע.";
+    state.message =
+      eventSaveErrorText(error.message) ||
+      (isEdit
+        ? "לא הצלחנו לשמור את השינויים. אם השרת כבר פתוח, צריך להפעיל אותו מחדש כדי לטעון את עדכון עריכת הקבוצה."
+        : "לא הצלחנו ליצור את הקבוצה. נסה שוב בעוד רגע.");
     showToast("השמירה נכשלה");
     render();
   }
@@ -1495,7 +1730,7 @@ async function submitInvite(event) {
 async function submitExpense(event) {
   event.preventDefault();
   const element = event.currentTarget;
-  await refreshExchangeRate(element);
+  if (element.dataset.mode !== "edit" || element.dataset.rateReady !== "true") await refreshExchangeRate(element);
   updateExpenseForm(element);
   const form = new FormData(element);
   const amount = Number(form.get("amount"));
@@ -1523,9 +1758,19 @@ async function submitExpense(event) {
     payers: [{ userId: payer, amount }],
     participants
   };
-  await api(`/api/events/${state.activeEventId}/expenses`, { method: "POST", body: JSON.stringify(payload) });
-  await closeDrawerStateOnly();
-  await openEvent(state.activeEventId);
+  const isEdit = element.dataset.mode === "edit";
+  const expenseId = element.dataset.expenseId;
+  try {
+    await api(isEdit ? `/api/events/${state.activeEventId}/expenses/${expenseId}` : `/api/events/${state.activeEventId}/expenses`, {
+      method: isEdit ? "PUT" : "POST",
+      body: JSON.stringify(payload)
+    });
+    await closeDrawerStateOnly();
+    await openEvent(state.activeEventId);
+  } catch (error) {
+    state.message = error.message === "creator_required" ? "רק מי שיצר את ההוצאה יכול לערוך אותה." : "לא הצלחנו לשמור את ההוצאה. נסה שוב בעוד רגע.";
+    render();
+  }
 }
 
 async function submitRestaurantExpense(event) {
@@ -1581,7 +1826,7 @@ async function createRestaurantBill(event) {
   state.eventData = data.event;
   state.activeRestaurantBillId = data.bill.id;
   await closeDrawerStateOnly();
-  state.message = "נפתחה מסעדה חדשה. כל אחד יכול להיכנס אליה ולהזין כמה הזמין.";
+  state.message = "";
   render({ cards: true });
 }
 
@@ -1597,7 +1842,7 @@ async function submitRestaurantItem(event) {
   });
   state.eventData = data.event;
   await closeDrawerStateOnly();
-  state.message = "החלק שלך במסעדה נשמר.";
+  state.message = "";
   render();
 }
 
@@ -1614,7 +1859,7 @@ async function submitRestaurantPayment(event) {
   state.eventData = data.event;
   await closeDrawerStateOnly();
   state.activeRestaurantBillId = null;
-  state.message = "המסעדה נסגרה ונוספה כהוצאה לפי הסכומים האישיים.";
+  state.message = "";
   render();
 }
 
@@ -1642,23 +1887,27 @@ async function deleteRestaurantBill(id, element) {
   await motion.cardRemove(element, async () => {
     const data = await api(`/api/events/${state.activeEventId}/restaurant-bills/${id}`, { method: "DELETE" });
     state.eventData = data.event;
-    state.message = "המסעדה הריקה נמחקה.";
+    state.message = "";
     render({ cards: true });
   });
 }
 
 async function deleteEvent(id) {
-  const event = state.events.find((item) => String(item.id) === String(id));
+  const event = state.events.find((item) => String(item.id) === String(id)) || state.eventData?.event;
   const ok = confirm(`למחוק את הקבוצה "${event?.name || ""}"? כל ההוצאות, המסעדות וההזמנות שלה יימחקו.`);
   if (!ok) return;
   await api(`/api/events/${id}`, { method: "DELETE" });
-  if (String(state.activeEventId) === String(id)) {
-    state.activeEventId = null;
-    state.eventData = null;
-  }
+  state.drawer = null;
+  state.activeEventId = null;
+  state.eventData = null;
+  state.activeExpenseId = null;
+  state.activeRestaurantBillId = null;
+  state.activeSettlementFlow = null;
+  state.expenseScope = "all";
+  state.expenseCategory = "all";
   state.message = "הקבוצה נמחקה.";
   await loadEvents();
-  render();
+  render({ cards: true });
 }
 
 async function removeEventMember(memberId) {
@@ -1709,6 +1958,8 @@ async function loadInviteInfo() {
 }
 
 function openDrawer(drawer) {
+  if (drawer === "profile") state.profileAvatarDraft = null;
+  if (drawer === "event" || drawer === "event-edit") state.eventAvatarDraft = null;
   state.drawer = drawer;
   render({ drawer: true });
 }
@@ -1739,8 +1990,13 @@ async function openEvent(id) {
 }
 
 async function deleteExpense(id, element) {
+  const expense = (state.eventData?.expenses || []).find((item) => String(item.id) === String(id));
+  const ok = confirm(`למחוק את ההוצאה "${expense?.title || ""}"?`);
+  if (!ok) return;
   await motion.cardRemove(element, async () => {
     await api(`/api/events/${state.activeEventId}/expenses/${id}`, { method: "DELETE" });
+    state.drawer = null;
+    state.activeExpenseId = null;
     await openEvent(state.activeEventId);
   });
 }
@@ -1813,6 +2069,7 @@ async function joinInvite() {
 
 async function logout() {
   await api("/api/auth/logout", { method: "POST", body: "{}" });
+  stopLiveUpdates();
   state.user = null;
   state.events = [];
   state.eventData = null;
@@ -1822,6 +2079,18 @@ function formatMoney(value, currency) {
   const amount = Number(value || 0);
   if (currency === "₪" || currency === "ILS") return `${amount < 0 ? "-" : ""}₪${fmt.format(Math.abs(amount))}`;
   return `${fmt.format(value)} ${currency}`;
+}
+
+function formatCompactAmount(value) {
+  const amount = Number(value || 0);
+  const formatted = fmt.format(Math.abs(amount)).replace(/\.00$/, "");
+  return `${amount < 0 ? "-" : ""}${formatted}`;
+}
+
+function formatCompactMoney(value, currency) {
+  const symbols = { ILS: "₪", "₪": "₪", USD: "$", EUR: "€", GBP: "£", GEL: "₾" };
+  const prefix = symbols[currency] || `${currency || ""} `;
+  return `${prefix}${formatCompactAmount(value)}`;
 }
 
 function currencySearchInput(name, selected = "ILS") {
@@ -2114,8 +2383,18 @@ function authErrorText(code) {
   return {
     invalid_credentials: "האימייל או הסיסמה לא נכונים.",
     email_exists: "כבר קיים חשבון עם האימייל הזה.",
-    missing_fields: "צריך למלא את כל השדות."
+    missing_fields: "צריך למלא את כל השדות.",
+    avatar_too_large: "התמונה גדולה מדי. נסה לבחור תמונה קטנה יותר.",
+    invalid_avatar: "התמונה לא תקינה. נסה לבחור קובץ תמונה אחר."
   }[code] || "לא הצלחנו להשלים את הפעולה. נסה שוב.";
+}
+
+function eventSaveErrorText(code) {
+  return {
+    missing_name: "צריך למלא שם קבוצה.",
+    avatar_too_large: "התמונה גדולה מדי. נסה לבחור תמונה קטנה יותר.",
+    invalid_avatar: "התמונה לא תקינה. נסה לבחור קובץ תמונה אחר."
+  }[code];
 }
 
 function registerServiceWorker() {
@@ -2136,6 +2415,16 @@ function authField(name, label, placeholder, icon, type, autocomplete) {
 }
 
 function iconSvg(name) {
+  if (name === "scale") {
+    return `<svg class="fp-scale-icon" viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+      <path d="M32 10v44" />
+      <path d="M18 18h28" />
+      <path d="M24 18 12 38h24L24 18Z" />
+      <path d="M40 18 28 38h24L40 18Z" />
+      <path d="M18 46h28" />
+      <path d="M24 54h16" />
+    </svg>`;
+  }
   const icons = {
     user: "bi-person",
     userPlus: "bi-person-plus",
@@ -2154,6 +2443,9 @@ function iconSvg(name) {
     edit: "bi-pencil-square",
     plus: "bi-plus-lg",
     receipt: "bi-receipt",
+    money: "bi-cash-stack",
+    coins: "bi-coin",
+    pie: "bi-pie-chart",
     trash: "bi-trash3",
     more: "bi-three-dots-vertical",
     chevron: "bi-chevron-down",

@@ -1761,15 +1761,23 @@ button.settlement-mobile-row {
 
 .expense-amount {
   display: grid;
-  gap: 3px;
   justify-items: start;
 }
 
 .expense-amount b {
   direction: ltr;
   color: #111211;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 950;
+  white-space: nowrap;
+}
+
+.expense-amount em {
+  color: #20833f;
+  font-style: normal;
+  font-size: 10.5px;
+  font-weight: 850;
+  white-space: nowrap;
 }
 
 .expense-delete {
@@ -1786,6 +1794,29 @@ button.settlement-mobile-row {
 .expense-delete svg {
   width: 18px;
   height: 18px;
+}
+
+.expense-details-delete {
+  width: 100% !important;
+  min-height: 46px !important;
+  margin-top: 10px !important;
+  border: 1px solid rgba(229, 93, 93, 0.22) !important;
+  border-radius: 16px !important;
+  background: rgba(255, 255, 255, 0.5) !important;
+  color: #b04444 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  font: inherit !important;
+  font-size: 14px !important;
+  font-weight: 900 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72) !important;
+}
+
+.expense-details-delete .bi,
+.expense-details-delete span {
+  color: #b04444 !important;
 }
 
 .auth-page {
@@ -5864,6 +5895,37 @@ textarea::placeholder {
   font-weight: 650 !important;
 }
 
+.event-main .expense-scope-switch {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 4px !important;
+  margin: -4px 0 12px !important;
+  padding: 4px !important;
+  border-radius: 16px !important;
+  border: 1px solid rgba(255, 255, 255, 0.78) !important;
+  background: rgba(255, 255, 255, 0.46) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72) !important;
+}
+
+.event-main .expense-scope-switch button {
+  min-width: 0 !important;
+  height: 38px !important;
+  border: 0 !important;
+  border-radius: 13px !important;
+  background: transparent !important;
+  color: #5f685d !important;
+  font: inherit !important;
+  font-size: 13px !important;
+  font-weight: 850 !important;
+  cursor: pointer !important;
+}
+
+.event-main .expense-scope-switch button.active {
+  color: #173d1d !important;
+  background: rgba(183, 244, 63, 0.38) !important;
+  box-shadow: 0 8px 20px rgba(126, 190, 48, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.7) !important;
+}
+
 .event-main .settlement-mobile-list,
 .event-main .balance-mobile-list,
 .event-main .restaurant-bill-list,
@@ -6226,16 +6288,25 @@ textarea::placeholder {
   z-index: 0 !important;
   width: 148px !important;
   height: 148px !important;
-  display: grid !important;
-  place-items: center !important;
-  color: rgba(31, 31, 31, 0.05) !important;
-  font-size: 132px !important;
+  object-fit: contain !important;
+  opacity: 0.055 !important;
+  filter: none !important;
   pointer-events: none !important;
 }
 
 .home-main .hero-watermark .bi {
   font-size: inherit !important;
   color: inherit !important;
+}
+
+.home-main .hero-watermark .fp-scale-icon {
+  width: 132px !important;
+  height: 132px !important;
+  fill: none !important;
+  stroke: currentColor !important;
+  stroke-width: 4.2 !important;
+  stroke-linecap: round !important;
+  stroke-linejoin: round !important;
 }
 
 .home-main .home-logo {
@@ -6883,6 +6954,240 @@ textarea::placeholder {
   box-shadow: 0 10px 24px rgba(13, 40, 24, 0.08) !important;
 }
 
+.expense-details-header:has(.expense-edit-round) {
+  grid-template-columns: 42px minmax(0, 1fr) 42px !important;
+}
+
+.expense-details-header:has(.expense-edit-round) > div {
+  grid-column: 2 !important;
+  text-align: center !important;
+}
+
+.expense-details-header:has(.expense-edit-round) > .round-action:not(.expense-edit-round) {
+  grid-column: 3 !important;
+}
+
+.expense-details-header .expense-edit-round {
+  grid-column: 1 !important;
+}
+
+.expense-details-modal {
+  padding: 28px !important;
+  border-radius: 32px 32px 0 0 !important;
+  background:
+    radial-gradient(circle at 50% 5%, rgba(183, 244, 63, 0.16), transparent 24%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.72), rgba(244, 241, 222, 0.6)) !important;
+  border: 1px solid rgba(255, 255, 255, 0.85) !important;
+  box-shadow: 0 16px 45px rgba(44, 72, 39, 0.08) !important;
+}
+
+.expense-details-hero {
+  display: grid !important;
+  grid-template-columns: 52px minmax(0, 1fr) 52px !important;
+  justify-items: center !important;
+  align-items: start !important;
+  gap: 10px !important;
+  margin-bottom: 20px !important;
+  direction: rtl !important;
+}
+
+.expense-details-hero .round-action {
+  width: 52px !important;
+  height: 52px !important;
+  border-radius: 50% !important;
+  background: rgba(255, 255, 255, 0.66) !important;
+  border: 1px solid rgba(13, 40, 24, 0.09) !important;
+  color: #2d6f14 !important;
+  box-shadow: 0 12px 26px rgba(44, 72, 39, 0.08) !important;
+}
+
+.expense-details-hero .expense-edit-round {
+  grid-column: 1 !important;
+}
+
+.expense-details-hero > .round-action:not(.expense-edit-round) {
+  grid-column: 3 !important;
+}
+
+.expense-details-icon {
+  grid-column: 2 !important;
+  width: 84px !important;
+  height: 84px !important;
+  border-radius: 50% !important;
+  display: grid !important;
+  place-items: center !important;
+  color: #2d6f14 !important;
+  background: rgba(255, 255, 255, 0.48) !important;
+  border: 1px solid rgba(255, 255, 255, 0.86) !important;
+  box-shadow: 0 0 34px rgba(183, 244, 63, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.78) !important;
+}
+
+.expense-details-icon .bi {
+  font-size: 34px !important;
+  color: #2d6f14 !important;
+}
+
+.expense-details-title {
+  grid-column: 1 / -1 !important;
+  text-align: center !important;
+  margin-top: 8px !important;
+  direction: rtl !important;
+}
+
+.expense-details-title span {
+  display: block !important;
+  color: rgba(17, 22, 17, 0.46) !important;
+  font-size: 15px !important;
+  font-weight: 800 !important;
+}
+
+.expense-details-title h2 {
+  margin: 5px 0 0 !important;
+  color: #111611 !important;
+  font-size: clamp(30px, 8vw, 38px) !important;
+  line-height: 1 !important;
+  font-weight: 950 !important;
+  letter-spacing: 0 !important;
+}
+
+.expense-details-card,
+.expense-participants-card {
+  padding: 12px 16px !important;
+  border-radius: 22px !important;
+  background: rgba(255, 255, 255, 0.58) !important;
+  border: 1px solid rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(22px) !important;
+  -webkit-backdrop-filter: blur(22px) !important;
+  box-shadow: 0 16px 45px rgba(44, 72, 39, 0.08) !important;
+  direction: rtl !important;
+}
+
+.expense-detail-row {
+  min-height: 48px !important;
+  display: grid !important;
+  grid-template-columns: 36px minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 10px !important;
+  border-bottom: 1px solid rgba(13, 40, 24, 0.08) !important;
+  direction: rtl !important;
+}
+
+.expense-detail-row:last-child {
+  border-bottom: 0 !important;
+}
+
+.expense-detail-icon {
+  width: 34px !important;
+  height: 34px !important;
+  border-radius: 12px !important;
+  display: grid !important;
+  place-items: center !important;
+  color: #2d6f14 !important;
+  background: rgba(244, 241, 222, 0.56) !important;
+  border: 1px solid rgba(255, 255, 255, 0.72) !important;
+}
+
+.expense-detail-row b {
+  color: rgba(17, 22, 17, 0.48) !important;
+  font-size: 14px !important;
+  font-weight: 750 !important;
+}
+
+.expense-detail-row strong {
+  color: #111611 !important;
+  font-size: 16px !important;
+  font-weight: 850 !important;
+  text-align: left !important;
+  direction: rtl !important;
+  unicode-bidi: plaintext !important;
+}
+
+.expense-detail-row.is-green strong {
+  color: #168236 !important;
+}
+
+.expense-details-section-title {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  margin-bottom: 10px !important;
+}
+
+.expense-details-section-title h3 {
+  margin: 0 !important;
+  color: #111611 !important;
+  font-size: 24px !important;
+  font-weight: 900 !important;
+}
+
+.expense-details-section-title span {
+  min-height: 34px !important;
+  padding: 0 12px !important;
+  border-radius: 999px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+  color: rgba(17, 22, 17, 0.54) !important;
+  background: rgba(244, 241, 222, 0.58) !important;
+  font-size: 13px !important;
+  font-weight: 850 !important;
+}
+
+.expense-details-participants {
+  display: grid !important;
+  gap: 10px !important;
+}
+
+.expense-participant-detail-row {
+  min-height: 64px !important;
+  display: grid !important;
+  grid-template-columns: 46px minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 8px 10px !important;
+  border-radius: 17px !important;
+  background: rgba(255, 255, 255, 0.58) !important;
+  border: 1px solid rgba(13, 40, 24, 0.07) !important;
+  direction: rtl !important;
+}
+
+.expense-participant-detail-row .member-dot {
+  width: 46px !important;
+  height: 46px !important;
+  border-radius: 50% !important;
+  display: grid !important;
+  place-items: center !important;
+  line-height: 1 !important;
+  text-align: center !important;
+  font-size: 14px !important;
+  font-weight: 900 !important;
+  padding: 0 !important;
+}
+
+.expense-participant-detail-row b {
+  display: block !important;
+  color: #111611 !important;
+  font-size: 16px !important;
+  font-weight: 850 !important;
+}
+
+.expense-participant-detail-row span {
+  display: block !important;
+  margin-top: 3px !important;
+  color: rgba(17, 22, 17, 0.48) !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+}
+
+.expense-participant-detail-row strong {
+  color: #168236 !important;
+  font-size: 16px !important;
+  font-weight: 900 !important;
+  direction: rtl !important;
+  unicode-bidi: plaintext !important;
+}
+
 .expense-modal-header span,
 .drawer-header span {
   display: block !important;
@@ -7086,6 +7391,33 @@ textarea::placeholder {
 .rate-panel button .bi,
 .rate-panel button span {
   color: #fffdf2 !important;
+}
+
+.participant-quick-actions {
+  display: flex !important;
+  justify-content: flex-start !important;
+  margin: -2px 0 8px !important;
+}
+
+.participant-quick-actions button {
+  min-height: 34px !important;
+  padding: 0 12px !important;
+  border: 1px solid rgba(13, 40, 24, 0.1) !important;
+  border-radius: 999px !important;
+  background: rgba(255, 253, 242, 0.72) !important;
+  color: #173d1d !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+  font: inherit !important;
+  font-size: 12px !important;
+  font-weight: 900 !important;
+  box-shadow: 0 8px 18px rgba(13, 40, 24, 0.06) !important;
+}
+
+.participant-quick-actions button .bi,
+.participant-quick-actions button span {
+  color: #173d1d !important;
 }
 
 .split-switch {
@@ -7940,7 +8272,23 @@ textarea::placeholder {
 }
 
 .event-main .event-bottom-actions.member-actions {
+  width: min(320px, calc(100% - 28px)) !important;
   grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+}
+
+.event-main .event-bottom-actions.member-actions .event-add-expense-button {
+  grid-column: 2 !important;
+  grid-row: 1 !important;
+}
+
+.event-main .event-bottom-actions.member-actions .restaurant-action {
+  grid-column: 1 !important;
+  grid-row: 1 !important;
+}
+
+.event-main .event-bottom-actions.member-actions .event-icon-action {
+  grid-column: 3 !important;
+  grid-row: 1 !important;
 }
 
 .event-main .event-bottom-action {
@@ -8273,7 +8621,7 @@ textarea::placeholder {
 
 .event-main .event-wallet-title {
   width: 100% !important;
-  justify-content: space-between !important;
+  justify-content: flex-start !important;
   justify-self: stretch !important;
   text-align: right !important;
   direction: rtl !important;
@@ -8324,6 +8672,21 @@ textarea::placeholder {
   display: grid !important;
   justify-items: center !important;
   text-align: center !important;
+}
+
+.event-main .event-wallet-total:has(> div + div) {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 12px !important;
+}
+
+.event-main .event-wallet-total:has(> div + div) > div {
+  min-width: 0 !important;
+  padding: 0 6px !important;
+}
+
+.event-main .event-wallet-total:has(> div + div) > div + div {
+  border-right: 1px solid rgba(25, 45, 25, 0.08) !important;
 }
 
 /* FAIRPAY motion system */
@@ -9662,4 +10025,347 @@ html[data-page-transition="back"]::view-transition-new(root) {
   .auth-submit {
     font-size: 20px !important;
   }
+}
+
+/* Compact expenses panel with internal scrolling and filters */
+.event-main .expenses-section {
+  max-height: min(52dvh, 520px) !important;
+  min-height: 260px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+.event-main .expenses-section .expense-scope-switch {
+  flex: 0 0 auto !important;
+}
+
+.event-main .expense-category-filter {
+  flex: 0 0 auto !important;
+  display: flex !important;
+  gap: 8px !important;
+  margin: 0 -2px 10px !important;
+  padding: 2px 2px 8px !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  scrollbar-width: none !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+.event-main .expense-category-filter::-webkit-scrollbar {
+  display: none !important;
+}
+
+.event-main .expense-category-filter button {
+  flex: 0 0 auto !important;
+  min-width: 76px !important;
+  height: 46px !important;
+  padding: 0 10px !important;
+  border: 1px solid rgba(255, 255, 255, 0.82) !important;
+  border-radius: 15px !important;
+  background: rgba(255, 255, 255, 0.42) !important;
+  color: #4e5a4e !important;
+  display: grid !important;
+  grid-template-columns: auto 1fr auto !important;
+  align-items: center !important;
+  gap: 6px !important;
+  font: inherit !important;
+  font-size: 12px !important;
+  font-weight: 850 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72) !important;
+}
+
+.event-main .expense-category-filter button .bi {
+  color: #2e7b31 !important;
+  font-size: 16px !important;
+}
+
+.event-main .expense-category-filter button small {
+  min-width: 18px !important;
+  height: 18px !important;
+  padding: 0 5px !important;
+  border-radius: 999px !important;
+  display: grid !important;
+  place-items: center !important;
+  background: rgba(244, 241, 222, 0.74) !important;
+  color: #5d665b !important;
+  font-size: 10px !important;
+  font-weight: 900 !important;
+}
+
+.event-main .expense-category-filter button.active {
+  color: #173d1d !important;
+  border-color: rgba(126, 190, 48, 0.46) !important;
+  background: rgba(183, 244, 63, 0.22) !important;
+  box-shadow: 0 9px 20px rgba(126, 190, 48, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.78) !important;
+}
+
+.event-main .expense-list-summary {
+  flex: 0 0 auto !important;
+  min-height: 42px !important;
+  margin: 0 0 10px !important;
+  padding: 0 14px !important;
+  border-radius: 15px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  background: rgba(255, 255, 255, 0.42) !important;
+  border: 1px solid rgba(255, 255, 255, 0.78) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.74) !important;
+}
+
+.event-main .expense-list-summary span {
+  color: rgba(17, 22, 17, 0.52) !important;
+  font-size: 12px !important;
+  font-weight: 850 !important;
+}
+
+.event-main .expense-list-summary strong {
+  color: #168236 !important;
+  font-size: 16px !important;
+  font-weight: 950 !important;
+}
+
+.event-main .expenses-section .expense-mobile-list {
+  min-height: 0 !important;
+  flex: 1 1 auto !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  padding: 0 2px 6px !important;
+  overscroll-behavior: contain !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(4, 71, 28, 0.24) transparent !important;
+}
+
+.event-main .expenses-section .expense-mobile-list::-webkit-scrollbar {
+  width: 4px !important;
+}
+
+.event-main .expenses-section .expense-mobile-list::-webkit-scrollbar-thumb {
+  border-radius: 999px !important;
+  background: rgba(4, 71, 28, 0.22) !important;
+}
+
+.event-main .expenses-section .home-empty {
+  flex: 1 1 auto !important;
+}
+
+.event-main .expenses-section .expense-mobile-row {
+  grid-template-columns: 42px minmax(0, 1fr) auto !important;
+  gap: 8px !important;
+}
+
+.event-main .expenses-section .expense-amount {
+  min-width: max-content !important;
+}
+
+/* Compact bank-style settlement list */
+.event-main .settlement-section {
+  padding: 18px 16px !important;
+}
+
+.event-main .settlement-mobile-list {
+  gap: 0 !important;
+  padding: 8px 18px !important;
+  border-radius: 22px !important;
+  background: rgba(255, 255, 255, 0.52) !important;
+  border: 1px solid rgba(255, 255, 255, 0.84) !important;
+  overflow: hidden !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78), 0 10px 28px rgba(42, 69, 38, 0.04) !important;
+}
+
+.event-main .settlement-mobile-row {
+  width: 100% !important;
+  min-height: 78px !important;
+  margin: 0 !important;
+  padding: 12px 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) 96px minmax(0, 1fr) !important;
+  align-items: center !important;
+  gap: 10px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #151a16 !important;
+  direction: ltr !important;
+}
+
+.event-main .settlement-mobile-row + .settlement-mobile-row {
+  border-top: 1px solid rgba(30, 55, 30, 0.08) !important;
+}
+
+.event-main .settlement-person {
+  display: grid !important;
+  gap: 8px !important;
+  min-width: 0 !important;
+  width: 100% !important;
+  align-content: center !important;
+}
+
+.event-main .settlement-from {
+  grid-column: 1 !important;
+  grid-row: 1 !important;
+  justify-items: start !important;
+  text-align: left !important;
+  direction: ltr !important;
+}
+
+.event-main .settlement-from small,
+.event-main .settlement-from strong {
+  width: 100% !important;
+  display: block !important;
+  direction: ltr !important;
+  unicode-bidi: isolate !important;
+  text-align: left !important;
+}
+
+.event-main .settlement-to {
+  grid-column: 3 !important;
+  grid-row: 1 !important;
+  justify-items: end !important;
+  text-align: right !important;
+  direction: rtl !important;
+}
+
+.event-main .settlement-to small,
+.event-main .settlement-to strong {
+  width: 100% !important;
+  display: block !important;
+  direction: rtl !important;
+  unicode-bidi: isolate !important;
+  text-align: right !important;
+}
+
+.event-main .settlement-person small {
+  color: rgba(17, 22, 17, 0.44) !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+}
+
+.event-main .settlement-person strong {
+  color: #151a16 !important;
+  font-size: 17px !important;
+  font-weight: 900 !important;
+  line-height: 1.15 !important;
+}
+
+.event-main .settlement-transfer-center {
+  grid-column: 2 !important;
+  grid-row: 1 !important;
+  display: grid !important;
+  justify-items: center !important;
+  align-items: center !important;
+  align-content: center !important;
+  align-self: center !important;
+  gap: 5px !important;
+  min-width: 0 !important;
+  text-align: center !important;
+}
+
+.event-main .settlement-transfer-center b {
+  color: #168236 !important;
+  font-size: 20px !important;
+  font-weight: 950 !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+}
+
+.event-main .settlement-arrow-box {
+  width: auto !important;
+  height: auto !important;
+  border-radius: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: #287a31 !important;
+  box-shadow: none !important;
+  opacity: 0.86 !important;
+}
+
+.event-main .settlement-arrow-box .bi {
+  font-size: 21px !important;
+}
+
+.event-main .settlement-mobile-row-readonly,
+.event-main .settlement-mobile-row:disabled {
+  opacity: 1 !important;
+}
+
+.event-main .settlement-mobile-row-readonly .settlement-arrow-box,
+.event-main .settlement-mobile-row:disabled .settlement-arrow-box,
+.event-main .settlement-mobile-row-readonly .settlement-arrow-box .bi,
+.event-main .settlement-mobile-row:disabled .settlement-arrow-box .bi {
+  color: #287a31 !important;
+}
+
+/* Home background refresh: real supplied lime abstract image behind the dashboard. */
+.home-main {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 246, 0.12) 0%, rgba(244, 241, 222, 0.16) 45%, rgba(238, 244, 232, 0.28) 100%),
+    radial-gradient(circle at 18% 5%, rgba(255, 255, 255, 0.38), rgba(255, 255, 255, 0) 28%),
+    url("/fairpay-home-background.jpeg?v=1") center top / cover no-repeat !important;
+}
+
+.home-main .profile-card,
+.home-main .group-row,
+.home-main .home-create-bar,
+.home-main .section-row button {
+  background-color: rgba(255, 255, 255, 0.46) !important;
+}
+
+/* Apple-style glass treatment for the home hero card. */
+.home-main .profile-card {
+  isolation: isolate !important;
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 57%), rgb(255 255 255 / 0%) 48%, #ffffffcf),
+    rgb(255 255 255 / 21%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.36) !important;
+  backdrop-filter: blur(6px) saturate(145%) !important;
+  -webkit-backdrop-filter: blur(6px) saturate(145%) !important;
+  box-shadow:
+    0 18px 52px rgba(54, 76, 38, 0.055),
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06) !important;
+}
+
+.home-main .profile-card::before {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 0 !important;
+  pointer-events: none !important;
+  border-radius: inherit !important;
+  backdrop-filter: blur(1.5px) !important;
+  -webkit-backdrop-filter: blur(1.5px) !important;
+  filter: url("#fairpay-glass-distortion") saturate(118%) brightness(1.08) !important;
+  opacity: 0.04 !important;
+}
+
+.home-main .profile-card::after {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 1 !important;
+  pointer-events: none !important;
+  border-radius: inherit !important;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0) 44%),
+    radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0) 34%),
+    linear-gradient(315deg, rgba(183, 244, 63, 0.018), rgba(255, 255, 255, 0) 42%) !important;
+  box-shadow:
+    inset 1px 1px 1px rgba(255, 255, 255, 0.32),
+    inset -1px -1px 1px rgba(255, 255, 255, 0.04) !important;
+}
+
+.home-main .hero-watermark {
+  z-index: 2 !important;
+}
+
+.home-main .home-logo,
+.home-main .profile-quick-logout,
+.home-main .profile-top,
+.home-main .balance-card {
+  z-index: 3 !important;
 }
